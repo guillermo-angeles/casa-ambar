@@ -1,0 +1,9 @@
+template:
+  - binary_sensor:
+      - name: Casa copia fallida
+        unique_id: casa_copia_fallida
+        device_class: problem
+        state: >-
+          {% set s = states('sensor.backup_last_successful_automatic_backup') %}
+          {{ not has_value('sensor.backup_last_successful_automatic_backup')
+             or (now() - (s | as_datetime)).total_seconds() > 26 * 3600 }}

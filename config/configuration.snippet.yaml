@@ -1,0 +1,21 @@
+homeassistant:
+  packages: !include_dir_named packages
+
+lovelace:
+  resource_mode: yaml
+  resources:
+    - url: /local/casa-ambar/casa-ambar-card.js?v=2.1.2
+      type: module
+  dashboards:
+    casa-ambar:
+      mode: yaml
+      title: Casa
+      icon: mdi:home
+      show_in_sidebar: true
+      filename: dashboards/casa.yaml
+    casa-pared:
+      mode: yaml
+      title: Pared
+      icon: mdi:tablet-dashboard
+      show_in_sidebar: false
+      filename: dashboards/pared.yaml

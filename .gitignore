@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.DS_Store
+test/docker/config/
+test/docker/.venv/
+
+test/echo-voz/techo5-casa-arm
+test/echo-voz/build/
+
+.env
+.env.*
+!.env.example
+private/
+*.pem
+*.key
+secrets.yaml
+.storage/

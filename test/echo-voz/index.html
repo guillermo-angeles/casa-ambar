@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Casa Ámbar · Voz integrada</title>
+<style>
+@font-face{font-family:Inter;src:url('../../config/www/casa-ambar/fonts/inter-latin.woff2')}*{box-sizing:border-box}body{margin:0;background:#e8ded2;color:#483630;font-family:Inter,system-ui,sans-serif}button{font:inherit;cursor:pointer;border:0}button:focus-visible{outline:3px solid #79515a;outline-offset:4px}.screen{position:relative;width:1280px;height:800px;overflow:hidden;background:#f0d5aa}.home{position:absolute;inset:0;width:1280px;height:800px;border:0;pointer-events:none}.rim{position:absolute;inset:0;pointer-events:none;border-radius:26px;border:7px solid transparent;background:linear-gradient(#f0d5aa,#f0d5aa) padding-box,linear-gradient(125deg,#89b8be 0%,#bba9d5 24%,#d990ad 52%,#f1bc80 76%,#a5c4ba 100%) border-box;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;padding:0}.voice{position:absolute;right:32px;bottom:32px;width:888px;border-radius:30px;background:#fff9ef;border:1px solid #e4ceb3;box-shadow:0 12px 28px #60463524;padding:28px 30px 30px;min-height:206px}.voice-header{display:flex;align-items:center;gap:14px;padding-right:90px;height:36px}.signal{width:32px;height:32px;border-radius:50%;background:linear-gradient(130deg,#8fbcc0,#b8a3d6 36%,#df9bb7 65%,#efbd88)}.label{font-size:20px;font-weight:600;letter-spacing:-.3px}.phase{font-size:19px;color:#796250;margin-left:auto}.cancel{position:absolute;right:16px;top:14px;width:80px;height:80px;border-radius:50%;background:#f1e5d5;color:#79515a;font-size:36px}.question{font-size:25px;font-weight:500;line-height:1.4;letter-spacing:-.6px;margin:22px 76px 0 0}.answer{font-size:30px;font-weight:500;line-height:1.43;letter-spacing:-.7px;margin:16px 18px 0 0;max-height:260px;overflow-y:auto;scrollbar-width:none;overscroll-behavior:contain;touch-action:pan-y}.answer::-webkit-scrollbar{display:none}.source{margin:18px 0 0;font-size:18px;color:#796250}.screen[data-phase=listening] .question{font-size:38px;letter-spacing:-1px;margin-top:26px}.screen[data-phase=thinking] .answer{font-size:27px;color:#796250}.screen[data-phase=error] .signal{background:#b96d58}.screen[data-phase=idle] .home{pointer-events:auto}.screen[data-phase=idle] .rim,.screen[data-phase=idle] .voice{display:none}[hidden]{display:none!important}.demo{width:1280px;padding:22px 32px;background:#f7efe5;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.demo strong{font-size:18px;margin-right:14px}.demo button{min-height:64px;border-radius:18px;padding:0 22px;background:#e7d9c9;color:#60473c;font-size:18px}.demo button[aria-pressed=true]{background:#79515a;color:#fff9ef}.note{width:1280px;padding:0 32px 24px;margin:0;background:#f7efe5;font-size:16px;color:#796250;line-height:1.5}
+</style>
+<main class="screen" data-phase="listening" aria-label="Prototipo del Echo a 1280 por 800">
+  <iframe class="home" src="../echo-v5/index.html" title="Casa Ámbar, fondo del prototipo"></iframe>
+  <div class="rim"></div>
+  <section class="voice" aria-live="polite" aria-atomic="true">
+    <div class="voice-header"><span class="signal" aria-hidden="true"></span><span class="label">Casa</span><span class="phase">Te escucho</span></div>
+    <button class="cancel" aria-label="Cerrar conversación">×</button>
+    <p class="question">¿Qué necesitas?</p><p class="answer" hidden></p><p class="source" hidden></p>
+  </section>
+</main>
+<nav class="demo" aria-label="Estados de demostración"><strong>Vista previa</strong><button data-state="idle">Casa</button><button data-state="listening" aria-pressed="true">Escuchando</button><button data-state="thinking">Preparando</button><button data-state="replying">Respuesta</button><button data-state="news">Consulta web</button><button data-state="error">Sin conexión</button></nav>
+<p class="note">Prototipo local con datos simulados. La franja de demostración no aparecerá en el Echo. Diseño estático sin animaciones, transiciones ni desenfoques. La integración real requiere adaptar la pantalla de conversación de TECHO5.</p>
+<script>
+const screen=document.querySelector('.screen');
+const examples={
+ idle:{phase:'idle'},
+ listening:{phase:'listening',label:'Te escucho',question:'¿Qué necesitas?'},
+ thinking:{phase:'thinking',label:'Preparando respuesta',question:'¿Qué modo tiene la casa?',answer:'Estoy consultando el estado de la casa.'},
+ replying:{phase:'replying',label:'Respondiendo',question:'¿Qué modo tiene la casa?',answer:'La casa está en modo Tarde. Las luces del salón están encendidas con una luz cálida.'},
+ news:{phase:'replying',label:'Respondiendo',question:'Busca las noticias de hoy y resúmelas.',answer:'Aquí verías un resumen breve de las noticias, mientras escuchas la respuesta. Puedes pedirme que amplíe una de ellas.',source:'Las fuentes consultadas aparecerían aquí.'},
+ error:{phase:'error',label:'No he podido conectar',question:'No he recibido la respuesta.',answer:'Puedes volver a intentarlo. Los controles de Casa siguen disponibles.'}
+};
+function show(name){const data=examples[name]||examples.listening;screen.dataset.phase=data.phase;for(const [selector,key]of[['.phase','label'],['.question','question'],['.answer','answer'],['.source','source']]){const node=document.querySelector(selector);node.textContent=data[key]||'';node.hidden=!data[key];}for(const button of document.querySelectorAll('[data-state]'))button.setAttribute('aria-pressed',String(button.dataset.state===name));}
+for(const button of document.querySelectorAll('[data-state]'))button.onclick=()=>show(button.dataset.state);
+document.querySelector('.cancel').onclick=()=>show('idle');
+window.showVoiceState=show;
+show(new URLSearchParams(location.search).get('estado')||'listening');
+</script>
+</html>

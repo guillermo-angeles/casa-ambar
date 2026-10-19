@@ -1,0 +1,36 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Transcripción de voz con Groq",
+        "description": "Introduce la clave de tu cuenta Groq. El audio se enviará a Groq para transcribirlo en español. Mantén el plan gratuito en la consola de Groq.",
+        "data": {
+          "api_key": "Clave API de Groq"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Transcripción de voz con Groq",
+        "description": "Introduce la clave de tu cuenta Groq. El audio se enviará a Groq para transcribirlo en español. Mantén el plan gratuito en la consola de Groq.",
+        "data": {
+          "api_key": "Clave API de Groq"
+        }
+      },
+      "reconfigure": {
+        "title": "Transcripción de voz con Groq",
+        "description": "Introduce la clave de tu cuenta Groq. El audio se enviará a Groq para transcribirlo en español. Mantén el plan gratuito en la consola de Groq.",
+        "data": {
+          "api_key": "Clave API de Groq"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "La clave no es válida o no tiene permisos.",
+      "cannot_connect": "No se pudo verificar Groq o el modelo de transcripción. Revisa la cuenta y vuelve a intentarlo."
+    },
+    "abort": {
+      "already_configured": "Groq ya está configurado.",
+      "reauth_successful": "Clave actualizada.",
+      "reconfigure_successful": "Clave actualizada."
+    }
+  }
+}

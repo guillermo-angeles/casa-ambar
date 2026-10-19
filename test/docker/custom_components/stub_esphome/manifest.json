@@ -1,0 +1,1 @@
+{"domain": "stub_esphome", "name": "Stub esphome services", "version": "0.0.1", "documentation": "https://example.invalid", "requirements": [], "dependencies": [], "codeowners": [], "iot_class": "calculated", "integration_type": "service"}

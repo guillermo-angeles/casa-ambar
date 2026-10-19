@@ -1,0 +1,45 @@
+{
+  "casaRealCargada": true,
+  "states": {
+    "idle": {
+      "phase": "idle",
+      "visible": false,
+      "fits": true,
+      "cancelFinger": false
+    },
+    "listening": {
+      "phase": "listening",
+      "visible": true,
+      "fits": true,
+      "cancelFinger": true
+    },
+    "thinking": {
+      "phase": "thinking",
+      "visible": true,
+      "fits": true,
+      "cancelFinger": true
+    },
+    "replying": {
+      "phase": "replying",
+      "visible": true,
+      "fits": true,
+      "cancelFinger": true
+    },
+    "news": {
+      "phase": "replying",
+      "visible": true,
+      "fits": true,
+      "cancelFinger": true
+    },
+    "error": {
+      "phase": "error",
+      "visible": true,
+      "fits": true,
+      "cancelFinger": true
+    }
+  },
+  "cancelReturnsHome": true,
+  "noAnimationBlur": true,
+  "idlePaints": 0,
+  "errors": []
+}

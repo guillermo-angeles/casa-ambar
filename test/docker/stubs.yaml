@@ -1,0 +1,217 @@
+template:
+  - light:
+      - name: Lámpara sofá
+        unique_id: stub_lampara_sofa
+        supports_transition: true
+        min_mireds: 250
+        max_mireds: 454
+        turn_on: []
+        turn_off: []
+        set_level: []
+        set_temperature: []
+      - name: Lámpara comedor
+        unique_id: stub_lampara_comedor
+        supports_transition: true
+        min_mireds: 250
+        max_mireds: 454
+        turn_on: []
+        turn_off: []
+        set_level: []
+        set_temperature: []
+      - name: Lámpara dormitorio
+        unique_id: stub_lampara_dormitorio
+        supports_transition: true
+        min_mireds: 250
+        max_mireds: 454
+        turn_on: []
+        turn_off: []
+        set_level: []
+        set_temperature: []
+      - name: Lámpara pie
+        unique_id: stub_lampara_pie
+        supports_transition: true
+        turn_on: []
+        turn_off: []
+        set_level: []
+      - name: LED cocina
+        unique_id: stub_led_cocina
+        supports_transition: true
+        turn_on: []
+        turn_off: []
+        set_level: []
+      - name: Lámpara recibidor
+        unique_id: stub_lampara_recibidor
+        supports_transition: true
+        turn_on: []
+        turn_off: []
+        set_level: []
+      - name: Echo Salón Screen
+        unique_id: stub_echo_salon_screen
+        supports_transition: true
+        turn_on: []
+        turn_off: []
+        set_level: []
+      - name: LED TV
+        unique_id: stub_led_tv
+        turn_on: []
+        turn_off: []
+  - lock:
+      - name: Recibidor cerradura
+        unique_id: stub_recibidor_cerradura
+        state: "{{ 'locked' if is_state('input_boolean.stub_puerta_cerrada', 'on') else 'unlocked' }}"
+        lock:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.stub_puerta_cerrada
+        unlock:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.stub_puerta_cerrada
+  - switch:
+      - name: Echo Salón Night mode
+        unique_id: stub_echo_salon_night_mode
+        turn_on: []
+        turn_off: []
+      - name: Echo Salón Presence detection
+        unique_id: stub_echo_salon_presence_detection
+        turn_on: []
+        turn_off: []
+      - name: Echo Salón Screen auto brightness
+        unique_id: stub_echo_salon_screen_auto_brightness
+        turn_on: []
+        turn_off: []
+      - name: Echo Salón Dashboard without its header
+        unique_id: stub_echo_salon_dashboard_without_its_header
+        turn_on: []
+        turn_off: []
+  - binary_sensor:
+      - name: Día laborable
+        unique_id: stub_dia_laborable
+        state: "{{ is_state('input_boolean.stub_dia_laborable', 'on') }}"
+      - name: Echo Salón Presence
+        unique_id: stub_echo_salon_presence
+        device_class: occupancy
+        state: "{{ is_state('input_boolean.stub_presencia', 'on') }}"
+  - sensor:
+      - name: AEMET Temperature
+        unique_id: stub_aemet_temperature
+        unit_of_measurement: °C
+        device_class: temperature
+        state: "16"
+      - name: Echo Salón Lux
+        unique_id: stub_echo_salon_lux
+        unit_of_measurement: lx
+        device_class: illuminance
+        state: "12"
+      - name: Backup Última copia de seguridad automática realizada correctamente
+        unique_id: stub_backup_ultima
+        default_entity_id: sensor.backup_last_successful_automatic_backup
+        device_class: timestamp
+        state: "{{ now() - timedelta(hours=2) }}"
+      - name: Mando salón Batería
+        unique_id: stub_mando_salon_bateria
+        default_entity_id: sensor.mando_salon_bateria
+        unit_of_measurement: "%"
+        device_class: battery
+        state: "1"
+      - name: Mando cocina Batería
+        unique_id: stub_mando_cocina_bateria
+        default_entity_id: sensor.mando_cocina_bateria
+        unit_of_measurement: "%"
+        device_class: battery
+        state: "90"
+      - name: Mando dormitorio Batería
+        unique_id: stub_mando_habitacion_bateria
+        default_entity_id: sensor.mando_habitacion_bateria
+        unit_of_measurement: "%"
+        device_class: battery
+        state: "1"
+      - name: Cerradura Battery
+        unique_id: stub_recibidor_cerradura_battery
+        default_entity_id: sensor.recibidor_cerradura_battery
+        unit_of_measurement: "%"
+        device_class: battery
+        state: "66"
+  - weather:
+      - name: AEMET
+        unique_id: stub_aemet
+        condition_template: rainy
+        temperature_template: "{{ states('sensor.aemet_temperature') | float(0) }}"
+        temperature_unit: °C
+        humidity_template: "63"
+  - select:
+      - name: Echo Salón screen language
+        unique_id: stub_echo_salon_screen_language
+        state: "Español"
+        options: "{{ [\"Match all\", \"English\", \"Deutsch\", \"Español\", \"Français\", \"Italiano\", \"Nederlands\", \"Русский\"] }}"
+        select_option: []
+      - name: Echo Salón clock format
+        unique_id: stub_echo_salon_clock_format
+        state: "24-hour"
+        options: "{{ [\"12-hour\", \"24-hour\"] }}"
+        select_option: []
+      - name: Echo Salón theme
+        unique_id: stub_echo_salon_theme
+        state: "Ember"
+        options: "{{ [\"Walnut\", \"Slate\", \"Midnight\", \"Forest\", \"Plum\", \"Ocean\", \"Ember\", \"Mint\", \"Lavender\", \"Graphite\", \"Cherry\", \"Paper\", \"Linen\", \"Custom\"] }}"
+        select_option: []
+      - name: Echo Salón clock style
+        unique_id: stub_echo_salon_clock_style
+        state: "Classic"
+        options: "{{ [\"Classic\", \"Big\", \"Flip\", \"LED\", \"Analog\", \"Words\", \"Sun\", \"Dashboard\", \"Binary\", \"World\", \"Agenda\", \"Glow\"] }}"
+        select_option: []
+      - name: Echo Salón night hours
+        unique_id: stub_echo_salon_night_hours
+        state: "Never"
+        options: "{{ [\"Never\", \"22:00 – 06:00\", \"23:00 – 06:00\", \"00:00 – 07:00\", \"21:00 – 07:00\", \"23:00 – 08:00\", \"Custom\", \"Controlled by Home Assistant\"] }}"
+        select_option: []
+      - name: Echo Salón screen at night
+        unique_id: stub_echo_salon_screen_at_night
+        state: "Screen off"
+        options: "{{ [\"Screen off\", \"Night light\", \"Night clock\"] }}"
+        select_option: []
+      - name: Echo Salón night clock style
+        unique_id: stub_echo_salon_night_clock_style
+        state: "Red"
+        options: "{{ [\"Red\", \"Red LED\", \"Flip\"] }}"
+        select_option: []
+      - name: Echo Salón dashboard
+        unique_id: stub_echo_salon_dashboard
+        state: "Off"
+        options: "{{ [\"Off\", \"Drawn on the device\", \"Streamed\"] }}"
+        select_option: []
+
+input_boolean:
+  stub_puerta_cerrada:
+    name: Stub puerta cerrada
+  stub_dia_laborable:
+    name: Stub día laborable
+  stub_presencia:
+    name: Stub presencia Echo
+  stub_tv:
+    name: Stub TV encendida
+
+media_player:
+  - platform: universal
+    name: TV salón
+    unique_id: stub_tv_salon
+    device_class: tv
+    state_template: "{{ 'on' if is_state('input_boolean.stub_tv', 'on') else 'off' }}"
+    commands:
+      turn_on:
+        action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.stub_tv
+      turn_off:
+        action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.stub_tv
+
+person:
+  - name: Residente
+    id: residente
+    device_trackers:
+      - device_tracker.stub_residente
+
+camera:
+  - platform: stub_esphome

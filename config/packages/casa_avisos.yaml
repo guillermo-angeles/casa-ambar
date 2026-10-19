@@ -1,0 +1,137 @@
+automation:
+  - id: casa_aviso_puerta_sin_cerrar
+    alias: 'Casa: aviso de puerta sin cerrar'
+    description: Un minuto después de pasar a Dormir o Fuera avisa al iPhone si la cerradura no está cerrada, con la acción Cerrar puerta.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_select.modo_casa
+        to:
+          - Dormir
+          - Fuera
+    actions:
+      - delay:
+          minutes: 1
+      - condition: template
+        value_template: >-
+          {{ states('lock.recibidor_cerradura') in ['unlocked', 'open']
+             and states('input_select.modo_casa') in ['Dormir', 'Fuera'] }}
+      - action: notify.mobile_app_telefono_residente
+        data:
+          title: Puerta sin cerrar
+          message: "Modo {{ states('input_select.modo_casa') }}: la cerradura no está cerrada."
+          data:
+            tag: casa-puerta
+            group: casa-seguridad
+            push:
+              interruption-level: time-sensitive
+            actions:
+              - action: CASA_CERRAR_PUERTA
+                title: Cerrar puerta
+                authenticationRequired: true
+
+  - id: casa_aviso_puerta_abierta_noche
+    alias: 'Casa: aviso de puerta abierta de noche'
+    description: Avisa al iPhone si la cerradura lleva más de 10 min sin cerrar con el sol bajo el horizonte.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: lock.recibidor_cerradura
+        to:
+          - unlocked
+          - open
+        for:
+          minutes: 10
+    conditions:
+      - condition: state
+        entity_id: sun.sun
+        state: below_horizon
+    actions:
+      - action: notify.mobile_app_telefono_residente
+        data:
+          title: Puerta abierta
+          message: La cerradura lleva más de 10 minutos sin cerrar.
+          data:
+            tag: casa-puerta
+            group: casa-seguridad
+            push:
+              interruption-level: time-sensitive
+            actions:
+              - action: CASA_CERRAR_PUERTA
+                title: Cerrar puerta
+                authenticationRequired: true
+
+  - id: casa_aviso_cerrar_puerta_accion
+    alias: 'Casa: cerrar puerta desde la notificación'
+    description: Al pulsar Cerrar puerta en la notificación cierra la cerradura y confirma el resultado en la misma notificación.
+    mode: single
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: CASA_CERRAR_PUERTA
+    actions:
+      - action: lock.lock
+        target:
+          entity_id: lock.recibidor_cerradura
+      - wait_template: "{{ is_state('lock.recibidor_cerradura', 'locked') }}"
+        timeout: 45
+        continue_on_timeout: true
+      - action: notify.mobile_app_telefono_residente
+        data:
+          title: Cerradura
+          message: >-
+            {{ 'Puerta cerrada.' if is_state('lock.recibidor_cerradura', 'locked') else 'No se ha podido cerrar la puerta.' }}
+          data:
+            tag: casa-puerta
+            group: casa-seguridad
+
+  - id: casa_aviso_pilas_semanal
+    alias: 'Casa: resumen semanal de pilas'
+    description: Los domingos a las 11:00 avisa de los mandos IKEA y de la cerradura con batería por debajo del 20 %.
+    mode: single
+    triggers:
+      - trigger: time
+        at: "11:00:00"
+    conditions:
+      - condition: time
+        weekday:
+          - sun
+    actions:
+      - variables:
+          bajas: >-
+            {% set ns = namespace(l=[]) %}
+            {% for e in ['sensor.mando_salon_bateria', 'sensor.mando_cocina_bateria', 'sensor.mando_habitacion_bateria', 'sensor.recibidor_cerradura_battery'] %}
+              {% if is_number(states(e)) and states(e) | float < 20 %}
+                {% set ns.l = ns.l + [(state_attr(e, 'friendly_name') | default(e) | replace(' Batería', '')) ~ ' (' ~ (states(e) | float | round(0) | int) ~ ' %)'] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.l }}
+      - condition: template
+        value_template: "{{ bajas | length > 0 }}"
+      - action: notify.mobile_app_telefono_residente
+        data:
+          title: Pilas bajas
+          message: "{{ bajas | join(', ') }}"
+          data:
+            tag: casa-pilas
+            group: casa-mantenimiento
+
+  - id: casa_aviso_backup
+    alias: 'Casa: aviso de copia de seguridad'
+    description: Avisa al iPhone si la última copia de seguridad automática correcta tiene más de 26 horas.
+    mode: single
+    triggers:
+      - trigger: template
+        value_template: >-
+          {{ has_value('sensor.backup_last_successful_automatic_backup')
+             and (now() - (states('sensor.backup_last_successful_automatic_backup') | as_datetime)).total_seconds() > 26 * 3600 }}
+    actions:
+      - action: notify.mobile_app_telefono_residente
+        data:
+          title: Copia de seguridad
+          message: >-
+            La última copia correcta fue hace {{ ((now() - (states('sensor.backup_last_successful_automatic_backup') | as_datetime)).total_seconds() / 3600) | round(0) | int }} horas.
+          data:
+            tag: casa-backup
+            group: casa-mantenimiento

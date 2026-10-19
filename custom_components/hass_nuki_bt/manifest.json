@@ -1,0 +1,27 @@
+{
+  "domain": "hass_nuki_bt",
+  "name": "Nuki BT",
+  "bluetooth": [
+    {
+      "local_name": "Nuki_*"
+    }
+  ],
+  "codeowners": [
+    "@ronengr"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "bluetooth_adapters"
+  ],
+  "documentation": "https://github.com/ronengr/hass_nuki_bt",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/ronengr/hass_nuki_bt/issues",
+  "loggers": [
+    "custom_components.hass_nuki_bt.pyNukiBT"
+  ],
+  "requirements": [
+    "crccheck>=1.3.0",
+    "construct>=2.10.70"
+  ],
+  "version": "0.0.20+casa.1"
+}

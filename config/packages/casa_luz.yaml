@@ -1,0 +1,113 @@
+input_boolean:
+  casa_luz_manual_sofa:
+    name: Luz sofá ajustada a mano
+    icon: mdi:hand-back-right
+  casa_luz_manual_comedor:
+    name: Luz comedor ajustada a mano
+    icon: mdi:hand-back-right
+  casa_luz_manual_dormitorio:
+    name: Luz dormitorio ajustada a mano
+    icon: mdi:hand-back-right
+
+automation:
+  - id: casa_luz_sigue_al_sol
+    alias: 'Casa: luz sigue al sol'
+    description: En Día y Tarde, ajusta la temperatura de color de las lámparas de sofá, comedor y dormitorio a sensor.casa_temperatura_color al encenderse y cada 10 minutos. Solo toca la temperatura, nunca el brillo, y respeta las lámparas marcadas como ajustadas a mano.
+    mode: queued
+    max: 6
+    triggers:
+      - trigger: state
+        id: encendido
+        entity_id:
+          - light.lampara_sofa
+          - light.lampara_comedor
+          - light.lampara_dormitorio
+        from: "off"
+        to: "on"
+      - trigger: time_pattern
+        id: periodico
+        minutes: /10
+    conditions:
+      - condition: state
+        entity_id: input_select.modo_casa
+        state:
+          - Día
+          - Tarde
+    actions:
+      - variables:
+          objetivo: "{{ states('sensor.casa_temperatura_color') | int(0) }}"
+          transicion: "{{ 2 if trigger.id == 'encendido' else 30 }}"
+      - condition: template
+        value_template: "{{ 2202 <= objetivo <= 4000 }}"
+      - repeat:
+          for_each:
+            - light.lampara_sofa
+            - light.lampara_comedor
+            - light.lampara_dormitorio
+          sequence:
+            - if:
+                - condition: template
+                  value_template: >-
+                    {% set manual = 'input_boolean.casa_luz_manual_' ~ (repeat.item.split('.')[1] | replace('lampara_', '')) %}
+                    {{ is_state(repeat.item, 'on')
+                       and is_state(manual, 'off')
+                       and ((state_attr(repeat.item, 'color_temp_kelvin') | int(0)) - objetivo) | abs > 40 }}
+              then:
+                - action: light.turn_on
+                  target:
+                    entity_id: "{{ repeat.item }}"
+                  data:
+                    color_temp_kelvin: "{{ objetivo }}"
+                    transition: "{{ transicion }}"
+
+  - id: casa_luz_detectar_ajuste_manual
+    alias: 'Casa: luz detectar ajuste manual'
+    description: Marca una lámpara como ajustada a mano cuando cambia su temperatura de color estando encendida por una persona (context.user_id) o por un origen sin padre ajeno a las automatizaciones de luz y de modo (HomeKit, mandos). No se pisa hasta que se apague.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.lampara_sofa
+          - light.lampara_comedor
+          - light.lampara_dormitorio
+    conditions:
+      - condition: template
+        value_template: >-
+          {% set a = trigger.from_state %}
+          {% set b = trigger.to_state %}
+          {{ a is not none and b is not none
+             and a.state == 'on' and b.state == 'on'
+             and a.attributes.get('color_temp_kelvin') != b.attributes.get('color_temp_kelvin') }}
+      - condition: template
+        value_template: >-
+          {% set c = trigger.to_state.context %}
+          {% set ns = namespace(reciente=false) %}
+          {% for a in ['automation.casa_luz_sigue_al_sol', 'automation.casa_aplicar_modo'] %}
+            {% set t = state_attr(a, 'last_triggered') %}
+            {% if t is not none and (now() - (t | as_datetime)).total_seconds() < 120 %}
+              {% set ns.reciente = true %}
+            {% endif %}
+          {% endfor %}
+          {{ c.user_id is not none or (c.parent_id is none and not ns.reciente) }}
+    actions:
+      - action: input_boolean.turn_on
+        target:
+          entity_id: "input_boolean.casa_luz_manual_{{ trigger.entity_id.split('.')[1] | replace('lampara_', '') }}"
+
+  - id: casa_luz_reiniciar_ajuste_manual
+    alias: 'Casa: luz reiniciar ajuste manual'
+    description: Al apagarse una lámpara se borra su marca de ajuste manual y vuelve a seguir al sol.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: state
+        entity_id:
+          - light.lampara_sofa
+          - light.lampara_comedor
+          - light.lampara_dormitorio
+        to: "off"
+    actions:
+      - action: input_boolean.turn_off
+        target:
+          entity_id: "input_boolean.casa_luz_manual_{{ trigger.entity_id.split('.')[1] | replace('lampara_', '') }}"

@@ -1,0 +1,532 @@
+diff --git a/echod/internal/feature/display/casa_voice.go b/echod/internal/feature/display/casa_voice.go
+new file mode 100644
+index 0000000..8270cd3
+--- /dev/null
++++ b/echod/internal/feature/display/casa_voice.go
+@@ -0,0 +1,210 @@
++//go:build !dot && !spot
++
++package display
++
++import (
++	"fmt"
++	"image"
++	"image/color"
++	"image/draw"
++	"strings"
++	"unicode/utf8"
++
++	"golang.org/x/image/font"
++
++	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
++	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
++	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
++)
++
++type casaVoiceLayer struct {
++	key       string
++	image     *image.RGBA
++	faces     [5]font.Face
++	close     image.Rectangle
++	maxScroll int
++}
++
++func casaVoicePhase(phase string) bool {
++	return phase == "listening" || phase == "thinking" || phase == "replying" || phase == "lingering"
++}
++
++func casaVoiceFrameKey(s scene) string {
++	if !s.showDash || !casaVoicePhase(s.phase) || s.updateActive || s.call.Phase != phone.Idle || s.ring.any() || s.showVolume || s.showSheet || s.showDrawer || s.showCamera || s.showWeather || s.showRadar || s.showAlert || s.showCalendar || s.showDeck || s.showWifi || s.bt.Pairing || s.setupAsking || s.showVideo || s.showVideoAsk || s.showAnnouncement || s.announceRecording || s.showReminder || s.showNotification || s.popup != nil || s.pin.open {
++		return ""
++	}
++	return fmt.Sprintf("%d:%t:%s:%s:%s:%s:%d", s.dash.Version, s.dash.Ready, s.dash.Problem, s.phase, s.heard, s.reply, s.casaVoiceScroll) + fmt.Sprint(s.muted)
++}
++
++func (r *renderer) casaPx(n int) int { return n * r.w / 1280 }
++
++func (r *renderer) casaVoicePage(s scene) {
++	key := fmt.Sprintf("%s\x00%s\x00%s\x00%d", s.phase, s.heard, s.reply, s.casaVoiceScroll)
++	if r.casaVoice.image == nil || r.casaVoice.key != key {
++		r.casaVoice.image = image.NewRGBA(r.dst.Rect)
++		if r.casaVoice.faces[0] == nil {
++			for i, size := range []int{20, 19, 25, 30, 38} {
++				r.casaVoice.faces[i] = fontFace("inter", i == 0, float64(r.casaPx(size))/0.95)
++			}
++		}
++		previous := r.dst
++		r.dst = r.casaVoice.image
++		r.drawCasaVoice(s)
++		r.dst = previous
++		r.casaVoice.key = key
++	}
++	draw.Draw(r.dst, r.dst.Rect, r.casaVoice.image, image.Point{}, draw.Over)
++}
++
++func (r *renderer) casaLines(face font.Face, text string, width int) []string {
++	var out []string
++	for _, paragraph := range strings.Split(text, "\n") {
++		for _, line := range r.wrap(face, paragraph, width) {
++			for r.width(face, line) > width && utf8.RuneCountInString(line) > 1 {
++				runes := []rune(line)
++				n := len(runes) - 1
++				for n > 1 && r.width(face, string(runes[:n])) > width {
++					n--
++				}
++				out = append(out, string(runes[:n]))
++				line = string(runes[n:])
++			}
++			out = append(out, line)
++		}
++	}
++	return out
++}
++
++func (r *renderer) drawCasaVoice(s scene) {
++	px := r.casaPx
++	ink := color.RGBA{0x48, 0x36, 0x30, 255}
++	muted := color.RGBA{0x79, 0x62, 0x50, 255}
++	colors := []color.RGBA{{137, 184, 190, 255}, {187, 169, 213, 255}, {217, 144, 173, 255}, {241, 188, 128, 255}, {165, 196, 186, 255}}
++	for y := 0; y < r.h; y++ {
++		for x := 0; x < r.w; x++ {
++			if x >= px(7) && x < r.w-px(7) && y >= px(7) && y < r.h-px(7) {
++				continue
++			}
++			t := (float64(x)/float64(r.w)*0.7 + float64(y)/float64(r.h)*0.3) * 4
++			i := min(int(t), 3)
++			f := t - float64(i)
++			mix := func(a, b uint8) uint8 { return uint8(float64(a)*(1-f) + float64(b)*f) }
++			a, b := colors[i], colors[i+1]
++			r.dst.SetRGBA(x, y, color.RGBA{mix(a.R, b.R), mix(a.G, b.G), mix(a.B, b.B), 255})
++		}
++	}
++	phase := "Te escucho"
++	question := s.heard
++	answer := s.reply
++	if question == "" {
++		question = "¿Qué necesitas?"
++	}
++	switch s.phase {
++	case "thinking":
++		phase = "Preparando respuesta"
++		answer = "Estoy preparando la respuesta."
++	case "replying":
++		phase = "Respondiendo"
++	case "lingering":
++		phase = "Casa"
++		if answer == "" {
++			answer = "No he recibido la respuesta. Puedes volver a intentarlo."
++		}
++	}
++	questionFace := r.casaVoice.faces[2]
++	if s.phase == "listening" {
++		questionFace = r.casaVoice.faces[4]
++	}
++	questions := r.casaLines(questionFace, question, px(720))
++	if len(questions) > 2 {
++		questions = questions[:2]
++		questions[1] = r.fit(questionFace, questions[1], px(690)) + "…"
++	}
++	answers := r.casaLines(r.casaVoice.faces[3], answer, px(790))
++	lineH := px(43)
++	visible := min(len(answers), 6)
++	questionH := len(questions) * px(36)
++	if s.phase == "listening" {
++		questionH = px(54)
++	}
++	height := max(px(206), px(110)+questionH+visible*lineH)
++	card := image.Rect(r.w-px(920), r.h-px(32)-height, r.w-px(32), r.h-px(32))
++	r.casaRound(card, float64(px(30)), color.RGBA{228, 206, 179, 255})
++	r.casaRound(card.Inset(1), float64(px(30)-1), color.RGBA{255, 249, 239, 255})
++	close := image.Rect(card.Max.X-px(96), card.Min.Y+px(14), card.Max.X-px(16), card.Min.Y+px(94))
++	r.casaRound(close, float64(px(40)), color.RGBA{241, 229, 213, 255})
++	r.text(r.casaVoice.faces[3], "×", close.Min.X+px(29), close.Min.Y+px(52), color.RGBA{121, 81, 90, 255})
++	signal := image.Rect(card.Min.X+px(30), card.Min.Y+px(30), card.Min.X+px(62), card.Min.Y+px(62))
++	r.casaRound(signal, float64(px(16)), colors[2])
++	r.text(r.casaVoice.faces[0], "Casa", card.Min.X+px(76), card.Min.Y+px(54), ink)
++	r.text(r.casaVoice.faces[1], phase, close.Min.X-px(20)-r.width(r.casaVoice.faces[1], phase), card.Min.Y+px(54), muted)
++	y := card.Min.Y + px(111)
++	for _, line := range questions {
++		r.text(questionFace, line, card.Min.X+px(30), y, ink)
++		y += px(36)
++	}
++	y += px(17)
++	maxScroll := max(len(answers)-visible, 0)
++	scroll := min(max(s.casaVoiceScroll, 0), maxScroll)
++	for _, line := range answers[scroll : scroll+visible] {
++		r.text(r.casaVoice.faces[3], line, card.Min.X+px(30), y, ink)
++		y += lineH
++	}
++	r.zmu.Lock()
++	r.casaVoice.close = close
++	r.casaVoice.maxScroll = maxScroll
++	r.zmu.Unlock()
++}
++
++func (d *Display) casaVoiceGesture(g touch.Gesture) bool {
++	d.mu.Lock()
++	up := d.casaVoiceShowing
++	d.mu.Unlock()
++	if !up || d.r == nil {
++		return false
++	}
++	d.r.zmu.Lock()
++	close, maxScroll := d.r.casaVoice.close, d.r.casaVoice.maxScroll
++	d.r.zmu.Unlock()
++	switch g.Kind {
++	case touch.Tap:
++		if image.Pt(g.X, g.Y).In(close) {
++			d.mu.Lock()
++			active := d.view.Phase != "idle"
++			d.mu.Unlock()
++			d.clearAnswer()
++			if active {
++				voice.Get().Action()
++			}
++		}
++	case touch.Hold:
++		d.mu.Lock()
++		d.casaVoiceDragY = g.Y
++		d.casaVoiceStart = d.casaVoiceScroll
++		d.mu.Unlock()
++	case touch.Drag, touch.Release:
++		d.mu.Lock()
++		d.casaVoiceScroll = min(max(d.casaVoiceStart+(d.casaVoiceDragY-g.Y)/max(d.r.casaPx(43), 1), 0), maxScroll)
++		d.mu.Unlock()
++	case touch.SwipeUp:
++		d.mu.Lock()
++		d.casaVoiceScroll = min(d.casaVoiceScroll+1, maxScroll)
++		d.mu.Unlock()
++	case touch.SwipeDown:
++		d.mu.Lock()
++		d.casaVoiceScroll = max(d.casaVoiceScroll-1, 0)
++		d.mu.Unlock()
++	}
++	return true
++}
++
++func (r *renderer) casaRound(b image.Rectangle, radius float64, fill color.RGBA) {
++	mask := image.NewAlpha(b)
++	for y := b.Min.Y; y < b.Max.Y; y++ {
++		for x := b.Min.X; x < b.Max.X; x++ {
++			a := clamp01(0.5 - rrDist(float64(x)+0.5, float64(y)+0.5, float64(b.Min.X), float64(b.Min.Y), float64(b.Max.X), float64(b.Max.Y), radius))
++			mask.SetAlpha(x, y, color.Alpha{uint8(a * 255)})
++		}
++	}
++	draw.DrawMask(r.dst, b, image.NewUniform(fill), image.Point{}, mask, b.Min, draw.Over)
++}
+diff --git a/echod/internal/feature/display/casa_voice_test.go b/echod/internal/feature/display/casa_voice_test.go
+new file mode 100644
+index 0000000..0a12333
+--- /dev/null
++++ b/echod/internal/feature/display/casa_voice_test.go
+@@ -0,0 +1,138 @@
++//go:build !dot && !spot
++
++package display
++
++import (
++	"image"
++	"image/color"
++	"image/draw"
++	"image/png"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/HuskerMinion/techo5/echod/internal/config"
++	"github.com/HuskerMinion/techo5/echod/internal/feature/dashboard"
++	"github.com/HuskerMinion/techo5/echod/internal/feature/phone"
++	"github.com/HuskerMinion/techo5/echod/internal/feature/voice"
++	"github.com/HuskerMinion/techo5/echod/internal/hardware/touch"
++)
++
++func TestCasaVoiceCacheAndPriority(t *testing.T) {
++	s := scene{showDash: true, phase: "thinking", call: phone.State{Phase: phone.Idle}, dash: dashboard.View{Ready: true, Version: 1}}
++	key := casaVoiceFrameKey(s)
++	if key == "" {
++		t.Fatal("voice cannot be cached")
++	}
++	s.dash.Version++
++	if casaVoiceFrameKey(s) == key {
++		t.Fatal("new dashboard frame was ignored")
++	}
++	for _, alter := range []func(*scene){
++		func(s *scene) { s.updateActive = true }, func(s *scene) { s.setupAsking = true }, func(s *scene) { s.showVideo = true }, func(s *scene) { s.showNotification = true }, func(s *scene) { s.showAnnouncement = true }, func(s *scene) { s.showReminder = true }, func(s *scene) { s.showCamera = true }, func(s *scene) { s.showVolume = true }, func(s *scene) { s.call.Phase = phone.Ringing },
++	} {
++		copy := s
++		alter(&copy)
++		if casaVoiceFrameKey(copy) != "" {
++			t.Fatal("a priority page was cached as a voice frame")
++		}
++	}
++}
++
++func TestCasaVoiceLayoutScrollingAndCache(t *testing.T) {
++	canvas := image.NewRGBA(image.Rect(0, 0, 1280, 800))
++	r := newRenderer(canvas)
++	background := image.NewUniform(color.RGBA{220, 200, 180, 255})
++	var photo image.Image = background
++	if path := os.Getenv("CASA_VOICE_BACKGROUND"); path != "" {
++		f, err := os.Open(path)
++		if err != nil {
++			t.Fatal(err)
++		}
++		photo, err = png.Decode(f)
++		f.Close()
++		if err != nil {
++			t.Fatal(err)
++		}
++	}
++	examples := []scene{
++		{phase: "listening"},
++		{phase: "thinking", heard: "¿Qué modo tiene la casa?"},
++		{phase: "replying", heard: "¿Qué modo tiene la casa?", reply: "La casa está en modo Tarde. Las luces del salón están encendidas con una luz cálida."},
++		{phase: "replying", heard: "Busca las noticias de hoy y resúmelas.", reply: strings.Repeat("Un resumen de ejemplo para comprobar que puedes leer una respuesta larga deslizando con el dedo. ", 12)},
++		{phase: "lingering", heard: "¿Qué tiempo hará mañana?"},
++	}
++	for i, s := range examples {
++		draw.Draw(canvas, canvas.Rect, photo, image.Point{}, draw.Src)
++		before := canvas.RGBAAt(120, 300)
++		r.casaVoicePage(s)
++		if canvas.RGBAAt(120, 300) != before {
++			t.Fatal("voice obscures the left column")
++		}
++		if r.casaVoice.close.Dx() != 80 || r.casaVoice.close.Dy() != 80 {
++			t.Fatal("close target is smaller than approved")
++		}
++		if !r.casaVoice.close.In(canvas.Rect) {
++			t.Fatal("close outside screen")
++		}
++		cached := r.casaVoice.image
++		r.casaVoicePage(s)
++		if cached != r.casaVoice.image {
++			t.Fatal("unchanged words re-rendered")
++		}
++		if dir := os.Getenv("CASA_VOICE_OUTPUT"); dir != "" {
++			os.MkdirAll(dir, 0755)
++			f, err := os.Create(filepath.Join(dir, []string{"listening.png", "thinking.png", "replying.png", "long-answer.png", "error.png"}[i]))
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err := png.Encode(f, canvas); err != nil {
++				t.Fatal(err)
++			}
++			f.Close()
++		}
++		if i == 3 {
++			d := &Display{r: r, poke: make(chan struct{}, 1), casaVoiceShowing: true, view: voice.State{Phase: "idle"}}
++			if !d.casaVoiceGesture(touch.Gesture{Kind: touch.Hold, X: 600, Y: 600}) {
++				t.Fatal("voice touch leaked to dashboard")
++			}
++			d.casaVoiceGesture(touch.Gesture{Kind: touch.Drag, X: 600, Y: 300})
++			if d.casaVoiceScroll == 0 {
++				t.Fatal("long response cannot scroll")
++			}
++			d.casaVoiceGesture(touch.Gesture{Kind: touch.Tap, X: r.casaVoice.close.Min.X + 40, Y: r.casaVoice.close.Min.Y + 40})
++			if !d.quiet {
++				t.Fatal("close did not dismiss the response")
++			}
++		}
++	}
++}
++
++func TestCasaVoiceWorksFromClockWithoutOpeningDashboard(t *testing.T) {
++	config.Use(filepath.Join(t.TempDir(), "state.json"))
++	if err := config.Set().Dashboard().Mode(config.DashboardStreamed); err != nil {
++		t.Fatal(err)
++	}
++	for _, phase := range []string{"listening", "thinking", "replying", "lingering"} {
++		for _, night := range []bool{false, true} {
++			d := &Display{}
++			s := scene{phase: phase, redClock: night}
++			d.dashScene(&s, false)
++			if !s.showDash || !d.casaVoiceShowing {
++				t.Fatalf("phase %s night %v falls back to old voice screen", phase, night)
++			}
++			s = scene{phase: phase}
++			d.dashScene(&s, true)
++			if s.showDash {
++				t.Fatal("voice covered a priority page")
++			}
++		}
++	}
++	d := &Display{}
++	idle := scene{phase: "idle"}
++	d.dashScene(&idle, false)
++	if idle.showDash {
++		t.Fatal("voice changed the idle clock setting")
++	}
++}
+diff --git a/echod/internal/feature/display/dashboard.go b/echod/internal/feature/display/dashboard.go
+index 6594d6e..1c2c85b 100644
+--- a/echod/internal/feature/display/dashboard.go
++++ b/echod/internal/feature/display/dashboard.go
+@@ -133,6 +133,7 @@ func (d *Display) dashboardAsked(up bool) {
+ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
+ 	f := dashboard.Get()
+ 	mode := f.Mode()
++	integratedTurn := mode == config.DashboardStreamed && casaVoicePhase(s.phase)
+ 	d.mu.Lock()
+ 	if d.dash && !d.dashHeld && dashForgotten(d.dashTouched) {
+ 		d.dash = false
+@@ -143,13 +144,13 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
+ 	asked, overNight := d.dash, d.dash && d.dashNight
+ 	// Under the red night clock a dashboard is not seen: one not opened from the night screen is put
+ 	// by rather than fetched and redrawn all night for nobody.
+-	hidden := s.redClock && !overNight
++	hidden := s.redClock && !overNight && !integratedTurn
+ 	away := time.Now().Before(d.dashAwayUntil)
+ 	d.mu.Unlock()
+ 
+-	want := mode != config.DashboardOff && s.phase == "idle" && !sheetOrDrawer && !hidden &&
++	want := mode != config.DashboardOff && (s.phase == "idle" || integratedTurn) && !sheetOrDrawer && !hidden &&
+ 		!s.showCamera && !s.showWeather && !s.showRadar && !s.showCalendar && !s.showDeck && !s.showWifi && !s.bt.Pairing &&
+-		(asked || (f.Idle() && !away && !s.nowPlaying))
++		(integratedTurn || asked || (f.Idle() && !away && !s.nowPlaying))
+ 	s.showDash, s.dashMode, s.dashAsked = want, mode, want && overNight
+ 
+ 	streamed := want && mode == config.DashboardStreamed
+@@ -177,6 +178,8 @@ func (d *Display) dashScene(s *scene, sheetOrDrawer bool) {
+ 	over := d.overDashboard(s)
+ 	d.mu.Lock()
+ 	d.dashShowing = want
++	d.casaVoiceShowing = want && casaVoicePhase(s.phase)
++	s.casaVoiceScroll = d.casaVoiceScroll
+ 	// Either way the page wants every finger as it moves: streamed, to scroll the page under it;
+ 	// drawn, to scroll and to slide a tile's level. The rest of the screen wants swipes.
+ 	follow := want
+diff --git a/echod/internal/feature/display/display.go b/echod/internal/feature/display/display.go
+index 2bc0c44..bf91315 100644
+--- a/echod/internal/feature/display/display.go
++++ b/echod/internal/feature/display/display.go
+@@ -176,25 +176,30 @@ type Display struct {
+ 
+ 	// The dashboard page: asked for, when last touched, whether the last frame drew it, whether the
+ 	// touchscreen was put in follow mode for it, and a finger that started at its left edge.
+-	dash          bool
+-	dashHeld      bool // put up by Home Assistant: stays until it is taken down, not dashForgotten
+-	dashNight     bool // opened by a tap on the night screen: the one shown, and used, over the night
+-	dashTouched   time.Time
+-	dashShowing   bool
+-	dashFollow    bool
+-	dashEdge      int // edgeNone, or the edge the finger on it started at
+-	dashEdgeAt    image.Point
+-	dashAwayUntil time.Time // the idle dashboard put away, the clock up until then
+-	dashScroll    int       // how far down the drawn dashboard is scrolled
+-	dashScrollFor string    // the dashboard it is scrolled on
+-	dashDrag      drawnDrag // a finger moving on the drawn dashboard
+-	dashAdjust    dashAdjusting
+-	dashColor     *dashboard.LightColor // the color sheet, while it is up
+-	dashMedia     *mediaSheet           // the media sheet, while it is up
+-	dashClimate   *climateSheet         // the thermostat sheet, while it is up
+-	sheetSent     sliderSent            // what a sheet's slider last sent, while a finger moves it
+-	dashHolds     bool                  // the drawn dashboard is up, and wants a finger held still reported
+-	clockHolds    bool                  // the plain clock is up and Hold on the clock is on (gesture_hold.go)
++	dash             bool
++	dashHeld         bool // put up by Home Assistant: stays until it is taken down, not dashForgotten
++	dashNight        bool // opened by a tap on the night screen: the one shown, and used, over the night
++	dashTouched      time.Time
++	casaVoiceShowing bool
++	casaVoiceScroll  int
++	casaVoiceDragY   int
++	casaVoiceStart   int
++	casaVoiceDrawn   string
++	dashShowing      bool
++	dashFollow       bool
++	dashEdge         int // edgeNone, or the edge the finger on it started at
++	dashEdgeAt       image.Point
++	dashAwayUntil    time.Time // the idle dashboard put away, the clock up until then
++	dashScroll       int       // how far down the drawn dashboard is scrolled
++	dashScrollFor    string    // the dashboard it is scrolled on
++	dashDrag         drawnDrag // a finger moving on the drawn dashboard
++	dashAdjust       dashAdjusting
++	dashColor        *dashboard.LightColor // the color sheet, while it is up
++	dashMedia        *mediaSheet           // the media sheet, while it is up
++	dashClimate      *climateSheet         // the thermostat sheet, while it is up
++	sheetSent        sliderSent            // what a sheet's slider last sent, while a finger moves it
++	dashHolds        bool                  // the drawn dashboard is up, and wants a finger held still reported
++	clockHolds       bool                  // the plain clock is up and Hold on the clock is on (gesture_hold.go)
+ 
+ 	poke chan struct{}
+ 
+@@ -766,6 +771,7 @@ func (d *Display) changed(s voice.State) {
+ 	newHeard := s.Heard != "" && s.Heard != d.view.Heard
+ 	if s.Phase == "listening" && d.view.Phase != "listening" {
+ 		d.quiet = false
++		d.casaVoiceScroll = 0
+ 	}
+ 	d.view = s
+ 	d.viewAt = time.Now()
+@@ -1157,6 +1163,10 @@ func (d *Display) gesture(g touch.Gesture) {
+ 	dashUp := d.dashShowing
+ 	d.mu.Unlock()
+ 	if dashUp {
++		if d.casaVoiceGesture(g) {
++			d.wake()
++			return
++		}
+ 		d.dashGesture(g)
+ 		d.wake()
+ 		return
+@@ -2616,6 +2626,12 @@ func (d *Display) frame() time.Duration {
+ 	} else {
+ 		d.deckDrawn = key
+ 	}
++	if key := casaVoiceFrameKey(s); key != "" && key == d.casaVoiceDrawn {
++		d.answerShots()
++		return time.Second
++	} else {
++		d.casaVoiceDrawn = key
++	}
+ 	d.r.draw(s)
+ 	if err := d.dev.Present(); err != nil {
+ 		slog.Warn("presenting the frame failed", "err", err)
+diff --git a/echod/internal/feature/display/render.go b/echod/internal/feature/display/render.go
+index 00071c3..a1d872e 100644
+--- a/echod/internal/feature/display/render.go
++++ b/echod/internal/feature/display/render.go
+@@ -41,15 +41,16 @@ var shade = color.RGBA{0x00, 0x00, 0x00, 0x90}
+ type scene struct {
+ 	streaming bool // the camera is being streamed (feature/camstream)
+ 
+-	now     time.Time
+-	phase   string  // idle, listening, thinking, replying, lingering
+-	eq      *eqView // a turn's bars, when turns are drawn as the equalizer
+-	heard   string
+-	reply   string
+-	since   time.Time
+-	playing bool
+-	paused  bool
+-	muted   bool
++	now             time.Time
++	casaVoiceScroll int
++	phase           string  // idle, listening, thinking, replying, lingering
++	eq              *eqView // a turn's bars, when turns are drawn as the equalizer
++	heard           string
++	reply           string
++	since           time.Time
++	playing         bool
++	paused          bool
++	muted           bool
+ 
+ 	// glance is the glance strip's chips (feature/home/glance.go), drawn at the foot of the clock page.
+ 	glance []home.Chip
+@@ -260,6 +261,7 @@ type scene struct {
+ // renderer draws scenes onto one canvas. Faces are made once: parsing a font is cheap, but
+ // building a face at each size is not something to do per frame.
+ type renderer struct {
++	casaVoice    casaVoiceLayer
+ 	paint        // the canvas, its size, and the settings screen's tap zones
+ 	climateParts // the thermostat sheet's, where it was last drawn (climate_sheet.go)
+ 	// glow is the Glow style's images, kept between frames (glow.go).
+@@ -599,6 +601,9 @@ func (r *renderer) draw(s scene) {
+ 	}
+ 	if s.showDash {
+ 		r.dashboardPage(s)
++		if casaVoicePhase(s.phase) {
++			r.casaVoicePage(s)
++		}
+ 		if s.showVolume {
+ 			r.volumeBar(s)
+ 		}

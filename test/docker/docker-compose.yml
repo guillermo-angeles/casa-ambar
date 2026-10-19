@@ -1,0 +1,11 @@
+name: casa-ambar-public-test
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.10.2
+    container_name: casa-ambar-public-test
+    environment:
+      TZ: Europe/Madrid
+    ports:
+      - "127.0.0.1:18124:8123"
+    volumes:
+      - ./config:/config

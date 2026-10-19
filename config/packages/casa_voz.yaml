@@ -1,0 +1,201 @@
+script:
+  voz_estado_casa:
+    alias: 'Voz: estado de la casa'
+    icon: mdi:home-search
+    description: >-
+      Consulta el estado actual de la casa: modo activo, luces encendidas, si la puerta está cerrada y el tiempo exterior. Solo lectura; no cambia nada.
+    mode: parallel
+    max: 5
+    sequence:
+      - variables:
+          traduccion_tiempo:
+            clear-night: despejado
+            cloudy: nublado
+            exceptional: excepcional
+            fog: con niebla
+            hail: con granizo
+            lightning: con tormenta
+            lightning-rainy: con tormenta y lluvia
+            partlycloudy: parcialmente nublado
+            pouring: con lluvia intensa
+            rainy: lluvioso
+            snowy: con nieve
+            snowy-rainy: con aguanieve
+            sunny: soleado
+            windy: con viento
+            windy-variant: nublado y con viento
+          encendidas: >-
+            {% set ns = namespace(l=[]) %}
+            {% for e in ['light.lampara_sofa', 'light.lampara_comedor', 'light.lampara_pie', 'light.lampara_dormitorio', 'light.led_cocina', 'light.lampara_recibidor', 'light.led_tv'] %}
+              {% if is_state(e, 'on') %}
+                {% set ns.l = ns.l + [state_attr(e, 'friendly_name') | default(e)] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.l }}
+          cerradura: "{{ states('lock.recibidor_cerradura') }}"
+          puerta: >-
+            {{ 'cerrada' if cerradura == 'locked' else ('sin datos' if cerradura in ['unavailable', 'unknown'] else 'sin cerrar') }}
+          estado_tiempo: "{{ traduccion_tiempo.get(states('weather.aemet'), 'sin datos') }}"
+          temperatura: "{{ states('sensor.aemet_temperature') if is_number(states('sensor.aemet_temperature')) else 'sin datos' }}"
+          resultado:
+            mensaje: >-
+              Modo {{ states('input_select.modo_casa') }}.
+              {{ 'Luces encendidas: ' ~ (encendidas | join(', ')) ~ '.' if encendidas | length > 0 else 'No hay luces encendidas.' }}
+              Puerta {{ puerta }}.
+              Fuera hace {{ temperatura }} grados y está {{ estado_tiempo }}.
+            modo: "{{ states('input_select.modo_casa') }}"
+            luces_encendidas: "{{ encendidas }}"
+            puerta: "{{ puerta }}"
+      - stop: Estado de la casa consultado
+        response_variable: resultado
+
+  voz_escena_estancia:
+    alias: 'Voz: escena de una estancia'
+    icon: mdi:lightbulb-group
+    description: >-
+      Ajusta las luces de una estancia (salón, cocina, dormitorio o recibidor) a un nivel: apagar, tenue, normal o máximo. No toca la cerradura ni otros dispositivos.
+    mode: queued
+    max: 5
+    fields:
+      estancia:
+        name: Estancia
+        description: "Estancia a ajustar. Valores admitidos: salón, cocina, dormitorio, recibidor."
+        required: true
+        example: salón
+        selector:
+          select:
+            options:
+              - salón
+              - cocina
+              - dormitorio
+              - recibidor
+      nivel:
+        name: Nivel
+        description: "Nivel de luz. Valores admitidos: apagar, tenue, normal, máximo."
+        required: true
+        example: tenue
+        selector:
+          select:
+            options:
+              - apagar
+              - tenue
+              - normal
+              - máximo
+    sequence:
+      - variables:
+          mapa_luces:
+            salon:
+              - light.lampara_sofa
+              - light.lampara_comedor
+              - light.lampara_pie
+            cocina:
+              - light.led_cocina
+            dormitorio:
+              - light.lampara_dormitorio
+            recibidor:
+              - light.lampara_recibidor
+          con_temperatura:
+            - light.lampara_sofa
+            - light.lampara_comedor
+            - light.lampara_dormitorio
+          est: "{{ estancia | default('') | string | lower | trim | replace('ó', 'o') }}"
+          niv: "{{ nivel | default('') | string | lower | trim | replace('á', 'a') | replace('í', 'i') }}"
+          luces: "{{ mapa_luces.get(est, []) }}"
+          disponibles: "{{ luces | reject('is_state', 'unavailable') | list }}"
+          porcentaje: "{{ {'apagar': 0, 'tenue': 15, 'normal': 60, 'maximo': 100}.get(niv, -1) }}"
+          kelvin: >-
+            {{ {'tenue': 2202, 'normal': states('sensor.casa_temperatura_color') | int(2700), 'maximo': 4000}.get(niv, 2700) }}
+      - choose:
+          - conditions: "{{ luces | length == 0 or porcentaje < 0 }}"
+            sequence:
+              - variables:
+                  resultado:
+                    mensaje: Estancia o nivel no válidos. Estancias admitidas, salón, cocina, dormitorio y recibidor; niveles, apagar, tenue, normal y máximo.
+                    hecho: false
+              - stop: Parámetros no válidos
+                response_variable: resultado
+          - conditions: "{{ disponibles | length == 0 }}"
+            sequence:
+              - variables:
+                  resultado:
+                    mensaje: "Las luces de {{ est }} no están disponibles ahora mismo."
+                    hecho: false
+              - stop: Luces no disponibles
+                response_variable: resultado
+          - conditions: "{{ niv == 'apagar' }}"
+            sequence:
+              - action: light.turn_off
+                target:
+                  entity_id: "{{ disponibles }}"
+        default:
+          - repeat:
+              for_each: "{{ disponibles }}"
+              sequence:
+                - if:
+                    - condition: template
+                      value_template: "{{ repeat.item in con_temperatura }}"
+                  then:
+                    - action: light.turn_on
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        brightness_pct: "{{ porcentaje }}"
+                        color_temp_kelvin: "{{ kelvin }}"
+                  else:
+                    - action: light.turn_on
+                      target:
+                        entity_id: "{{ repeat.item }}"
+                      data:
+                        brightness_pct: "{{ porcentaje }}"
+      - variables:
+          resultado:
+            mensaje: >-
+              {{ 'Luces de ' ~ est ~ ' apagadas.' if niv == 'apagar' else 'Luces de ' ~ est ~ ' en nivel ' ~ niv ~ ' (' ~ porcentaje ~ ' %).' }}
+              {{ 'Alguna lámpara no estaba disponible.' if disponibles | length < luces | length else '' }}
+            hecho: true
+      - stop: Escena aplicada
+        response_variable: resultado
+
+  voz_lista_compra_anadir:
+    alias: 'Voz: añadir a la lista de la compra'
+    icon: mdi:cart-plus
+    description: >-
+      Añade uno o varios productos a la lista de la compra de Cookidoo. Para varios productos, sepáralos con comas.
+    mode: queued
+    max: 10
+    fields:
+      producto:
+        name: Producto
+        description: Producto a añadir, por ejemplo leche. Para varios, sepáralos con comas.
+        required: true
+        example: leche, pan integral
+        selector:
+          text:
+    sequence:
+      - variables:
+          productos: >-
+            {{ (producto | default('') | string).split(',') | map('trim') | reject('equalto', '') | list }}
+      - if:
+          - condition: template
+            value_template: "{{ productos | length == 0 }}"
+        then:
+          - variables:
+              resultado:
+                mensaje: No se ha indicado ningún producto que añadir.
+                hecho: false
+          - stop: Sin productos
+            response_variable: resultado
+      - repeat:
+          for_each: "{{ productos }}"
+          sequence:
+            - action: todo.add_item
+              target:
+                entity_id: todo.cookidoo_compras_adicionales
+              data:
+                item: "{{ repeat.item }}"
+      - variables:
+          resultado:
+            mensaje: "Añadido a la lista de la compra: {{ productos | join(', ') }}."
+            hecho: true
+      - stop: Productos añadidos
+        response_variable: resultado

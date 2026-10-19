@@ -1,0 +1,16 @@
+homekit:
+  - name: Camara Echo Salon
+    port: 21069
+    mode: accessory
+    filter:
+      include_entities:
+        - camera.echo_salon_camera
+    entity_config:
+      camera.echo_salon_camera:
+        name: Cámara del salón
+        stream_source: !secret echo_camera_rtsp
+        video_codec: libx264
+        max_width: 640
+        max_height: 360
+        max_fps: 10
+        support_audio: false

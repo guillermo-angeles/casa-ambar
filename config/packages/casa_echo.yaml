@@ -1,0 +1,218 @@
+script:
+  echo_ajustes_base:
+    alias: Echo Salón ajustes base
+    icon: mdi:tablet-dashboard
+    description: Idioma, reloj, tema, brillo automático, presencia y vista HomeView del dashboard casa-pared, retransmitida por dashcast.
+    mode: single
+    sequence:
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_screen_language
+        data:
+          option: Español
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_clock_format
+        data:
+          option: 24-hour
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_theme
+        data:
+          option: Graphite
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_clock_style
+        data:
+          option: Classic
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_night_hours
+        data:
+          option: Controlled by Home Assistant
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_screen_at_night
+        data:
+          option: Night clock
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_night_clock_style
+        data:
+          option: Red
+      - action: switch.turn_on
+        target:
+          entity_id:
+            - switch.echo_salon_screen_auto_brightness
+            - switch.echo_salon_presence_detection
+            - switch.echo_salon_dashboard_without_its_header
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_dashboard
+        data:
+          option: Streamed
+      - action: select.select_option
+        target:
+          entity_id: select.echo_salon_dashboard_to_show
+        data:
+          option: Pared · HomeView
+
+automation:
+  - id: casa_echo_ajustes_al_arrancar
+    alias: 'Casa: Echo ajustes base al arrancar'
+    description: Aplica los ajustes base y el modo actual al arrancar Home Assistant o al volver el Echo Salón.
+    mode: restart
+    triggers:
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: select.echo_salon_clock_format
+        from: unavailable
+    actions:
+      - delay:
+          seconds: 20
+      - wait_template: "{{ states('select.echo_salon_clock_format') not in ['unavailable', 'unknown'] }}"
+        timeout: '00:10:00'
+        continue_on_timeout: false
+      - delay:
+          seconds: 5
+      - action: script.echo_ajustes_base
+      - action: automation.trigger
+        target:
+          entity_id: automation.casa_echo_pantalla_por_modo
+
+  - id: casa_echo_pantalla_segun_modo
+    alias: 'Casa: Echo pantalla por modo'
+    description: Día y Tarde reloj normal; Noche y Cine brillo bajo; Dormir modo noche del Echo; Fuera pantalla apagada.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_select.modo_casa
+        not_from:
+          - unavailable
+          - unknown
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state:
+                  - Día
+                  - Tarde
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.echo_salon_night_mode
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.echo_salon_screen_auto_brightness
+              - action: light.turn_on
+                target:
+                  entity_id: light.echo_salon_screen
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state:
+                  - Noche
+                  - Cine
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.echo_salon_night_mode
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.echo_salon_screen_auto_brightness
+              - action: light.turn_on
+                target:
+                  entity_id: light.echo_salon_screen
+                data:
+                  brightness_pct: 5
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state: Dormir
+            sequence:
+              - action: switch.turn_on
+                target:
+                  entity_id: switch.echo_salon_night_mode
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state: Fuera
+            sequence:
+              - action: switch.turn_off
+                target:
+                  entity_id: switch.echo_salon_night_mode
+              - action: light.turn_off
+                target:
+                  entity_id: light.echo_salon_screen
+
+  - id: casa_echo_panel_con_presencia
+    alias: 'Casa: Echo panel al acercarse'
+    description: Con alguien cerca muestra el dashboard casa-pared y vuelve al reloj un minuto después de que se vaya.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: binary_sensor.echo_salon_presence
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_select.modo_casa
+        state:
+          - Día
+          - Tarde
+          - Noche
+    actions:
+      - action: esphome.echo_sal_n_dashboard_show
+      - wait_for_trigger:
+          - trigger: state
+            entity_id: binary_sensor.echo_salon_presence
+            to: "off"
+            for:
+              minutes: 1
+      - action: esphome.echo_sal_n_dashboard_hide
+
+  - id: casa_echo_camara_al_abrir
+    alias: 'Casa: Echo cámara del recibidor al abrir'
+    description: Al abrir la cerradura muestra camera.recibidor en el Echo Salón 20 segundos.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: lock.recibidor_cerradura
+        to:
+          - unlocked
+          - open
+        not_from:
+          - unavailable
+          - unknown
+    actions:
+      - action: esphome.echo_sal_n_home_show_camera
+        data:
+          entity: camera.recibidor
+          seconds: 20
+
+  - id: casa_echo_boton_accion
+    alias: 'Casa: Echo botón de acción alterna Noche y Dormir'
+    description: Pulsación del botón de acción del Echo; desde Noche pasa a Dormir y desde cualquier otro modo a Noche.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.echo_salon_action_button
+        not_from:
+          - unavailable
+        not_to:
+          - unavailable
+          - unknown
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.attributes.event_type == 'press' }}"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state: Noche
+            sequence:
+              - action: script.modo_dormir
+        default:
+          - action: script.modo_noche

@@ -1,0 +1,21 @@
+name: Casa Dashcast
+slug: casa_dashcast
+version: "0.2.0"
+description: Retransmite dashboards de Home Assistant a pantallas TECHO5 (Echo)
+arch:
+  - aarch64
+init: false
+startup: application
+boot: auto
+ports:
+  9555/tcp: 9555
+ports_description:
+  9555/tcp: Puerto al que se conectan las pantallas TECHO5
+options:
+  ha_url: http://homeassistant:8123
+  ha_token: ""
+  dashcast_key: ""
+schema:
+  ha_url: str
+  ha_token: password
+  dashcast_key: password

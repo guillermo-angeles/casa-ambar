@@ -1,0 +1,32 @@
+Ámbar:
+  primary-color: "#E8A33D"
+  accent-color: "#E8A33D"
+  modes:
+    light:
+      primary-background-color: "#F3F1ED"
+      secondary-background-color: "#E9E6E0"
+      card-background-color: "#FFFFFF"
+      primary-text-color: "#1B2233"
+      secondary-text-color: "#5F6677"
+      text-primary-color: "#FFFFFF"
+      divider-color: "#DDD9D1"
+      ha-card-border-radius: 20px
+      ha-card-box-shadow: "0 1px 3px rgba(27, 34, 51, 0.08)"
+      state-icon-color: "#C98A2B"
+      state-light-active-color: "#E8A33D"
+      state-lock-locked-color: "#3E8E6B"
+      state-lock-unlocked-color: "#D9534F"
+    dark:
+      primary-background-color: "#0E1423"
+      secondary-background-color: "#151C2E"
+      card-background-color: "#1A2236"
+      primary-text-color: "#F1EEE8"
+      secondary-text-color: "#9AA3B8"
+      text-primary-color: "#0E1423"
+      divider-color: "#27304A"
+      ha-card-border-radius: 20px
+      ha-card-box-shadow: none
+      state-icon-color: "#F2B54A"
+      state-light-active-color: "#F2B54A"
+      state-lock-locked-color: "#5FB58E"
+      state-lock-unlocked-color: "#E8706C"

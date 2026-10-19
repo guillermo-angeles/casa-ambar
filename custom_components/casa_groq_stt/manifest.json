@@ -1,0 +1,11 @@
+{
+  "domain": "casa_groq_stt",
+  "name": "Casa Groq STT",
+  "version": "0.1.0",
+  "config_flow": true,
+  "documentation": "https://console.groq.com/docs/speech-to-text",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "codeowners": []
+}

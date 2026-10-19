@@ -1,0 +1,217 @@
+views:
+- title: HomeView
+  path: homeview
+  type: panel
+  theme: Ámbar
+  cards:
+  - type: custom:casa-ambar-card
+- title: Echo
+  path: echo
+  type: sections
+  max_columns: 2
+  theme: Ámbar
+  sections:
+  - type: grid
+    cards:
+    - type: heading
+      heading: Modos
+      heading_style: title
+    - type: button
+      entity: script.modo_dia
+      name: Día
+      icon: mdi:weather-sunny
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_dia
+    - type: button
+      entity: script.modo_tarde
+      name: Tarde
+      icon: mdi:weather-sunset
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_tarde
+    - type: button
+      entity: script.modo_noche
+      name: Noche
+      icon: mdi:weather-night
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_noche
+    - type: button
+      entity: script.modo_cine
+      name: Cine
+      icon: mdi:movie-open
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_cine
+    - type: button
+      entity: script.modo_dormir
+      name: Dormir
+      icon: mdi:sleep
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_dormir
+    - type: button
+      entity: script.modo_fuera
+      name: Fuera
+      icon: mdi:exit-run
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_fuera
+  - type: grid
+    cards:
+    - type: heading
+      heading: Casa
+      heading_style: title
+    - type: tile
+      entity: weather.aemet
+      name: Tiempo
+    - type: tile
+      entity: light.lampara_sofa
+      name: Sofá
+    - type: tile
+      entity: light.lampara_comedor
+      name: Comedor
+    - type: tile
+      entity: light.led_tv
+      name: LED TV
+    - type: tile
+      entity: light.led_cocina
+      name: Cocina
+    - type: tile
+      entity: light.lampara_dormitorio
+      name: Dormitorio
+    - type: tile
+      entity: light.lampara_recibidor
+      name: Recibidor
+    - type: tile
+      entity: lock.recibidor_cerradura
+      name: Cerradura
+      tap_action:
+        action: none
+      icon_tap_action:
+        action: none
+- title: Pared
+  path: pared
+  type: panel
+  theme: Ámbar
+  cards:
+  - type: vertical-stack
+    cards:
+    - type: horizontal-stack
+      cards:
+      - type: clock
+        clock_style: digital
+        clock_size: large
+        no_background: true
+      - type: weather-forecast
+        entity: weather.aemet
+        forecast_type: daily
+        show_forecast: false
+        round_temperature: true
+    - type: horizontal-stack
+      cards:
+      - type: button
+        entity: script.modo_dia
+        name: Día
+        icon: mdi:weather-sunny
+        show_name: true
+        icon_height: 44px
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.modo_dia
+      - type: button
+        entity: script.modo_tarde
+        name: Tarde
+        icon: mdi:weather-sunset
+        show_name: true
+        icon_height: 44px
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.modo_tarde
+      - type: button
+        entity: script.modo_noche
+        name: Noche
+        icon: mdi:weather-night
+        show_name: true
+        icon_height: 44px
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.modo_noche
+      - type: button
+        entity: script.modo_cine
+        name: Cine
+        icon: mdi:movie-open
+        show_name: true
+        icon_height: 44px
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.modo_cine
+      - type: button
+        entity: script.modo_dormir
+        name: Dormir
+        icon: mdi:sleep
+        show_name: true
+        icon_height: 44px
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.modo_dormir
+      - type: button
+        entity: script.modo_fuera
+        name: Fuera
+        icon: mdi:exit-run
+        show_name: true
+        icon_height: 44px
+        tap_action:
+          action: perform-action
+          perform_action: script.turn_on
+          target:
+            entity_id: script.modo_fuera
+    - type: horizontal-stack
+      cards:
+      - type: tile
+        entity: light.lampara_sofa
+        name: Salón
+        icon: mdi:sofa
+        vertical: true
+      - type: tile
+        entity: light.led_cocina
+        name: Cocina
+        icon: mdi:countertop
+        vertical: true
+      - type: tile
+        entity: light.lampara_dormitorio
+        name: Dormitorio
+        icon: mdi:bed
+        vertical: true
+      - type: tile
+        entity: lock.recibidor_cerradura
+        name: Recibidor
+        icon: mdi:door
+        vertical: true
+        tap_action:
+          action: none
+        icon_tap_action:
+          action: none

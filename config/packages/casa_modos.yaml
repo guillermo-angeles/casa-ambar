@@ -1,0 +1,471 @@
+input_select:
+  modo_casa:
+    name: Modo de la casa
+    icon: mdi:home-clock
+    options:
+      - Día
+      - Tarde
+      - Noche
+      - Cine
+      - Dormir
+      - Fuera
+  modo_previo:
+    name: Modo previo
+    icon: mdi:history
+    options:
+      - Día
+      - Tarde
+      - Noche
+      - Cine
+      - Dormir
+      - Fuera
+
+input_boolean:
+  casa_automatica:
+    name: Casa automática
+    icon: mdi:home-automation
+    initial: true
+
+input_datetime:
+  hora_despertar_laborable:
+    name: Hora de despertar (laborable)
+    has_date: false
+    has_time: true
+    initial: "07:30"
+  hora_despertar_festivo:
+    name: Hora de despertar (festivo)
+    has_date: false
+    has_time: true
+    initial: "09:00"
+  hora_noche:
+    name: Hora de modo Noche
+    has_date: false
+    has_time: true
+    initial: "22:30"
+
+template:
+  - sensor:
+      - name: Casa temperatura color
+        unique_id: casa_temperatura_color
+        unit_of_measurement: K
+        icon: mdi:thermometer-lines
+        state: >-
+          {% set modo = states('input_select.modo_casa') %}
+          {% set e = state_attr('sun.sun', 'elevation') | float(0) %}
+          {% if modo == 'Tarde' %}
+            {% set x = [[e, 5] | min, -6] | max %}
+            {{ (2400 + (x + 6) / 11 * 1000) | round(0) | int }}
+          {% elif modo in ['Noche', 'Cine', 'Dormir'] %}
+            2202
+          {% elif modo == 'Fuera' %}
+            2700
+          {% else %}
+            4000
+          {% endif %}
+      - name: Casa brillo objetivo
+        unique_id: casa_brillo_objetivo
+        unit_of_measurement: "%"
+        icon: mdi:brightness-percent
+        state: >-
+          {{ {'Día': 100, 'Tarde': 60, 'Noche': 30, 'Cine': 15, 'Dormir': 10, 'Fuera': 0}.get(states('input_select.modo_casa'), 100) }}
+      - name: Casa resumen
+        unique_id: casa_resumen
+        icon: mdi:home-analytics
+        state: >-
+          {% set n = ['light.lampara_sofa', 'light.lampara_comedor', 'light.lampara_pie', 'light.lampara_dormitorio', 'light.led_cocina', 'light.lampara_recibidor', 'light.led_tv'] | select('is_state', 'on') | list | length %}
+          {% set p = states('lock.recibidor_cerradura') %}
+          {% set luces = 'Sin luces encendidas' if n == 0 else (n ~ (' luz encendida' if n == 1 else ' luces encendidas')) %}
+          {% set puerta = 'Puerta cerrada' if p == 'locked' else ('Puerta sin datos' if p in ['unavailable', 'unknown'] else 'Puerta sin cerrar') %}
+          {{ luces ~ ' · ' ~ puerta }}
+        attributes:
+          luces_encendidas: >-
+            {{ ['light.lampara_sofa', 'light.lampara_comedor', 'light.lampara_pie', 'light.lampara_dormitorio', 'light.led_cocina', 'light.lampara_recibidor', 'light.led_tv'] | select('is_state', 'on') | list | length }}
+          puerta: >-
+            {% set p = states('lock.recibidor_cerradura') %}
+            {{ 'cerrada' if p == 'locked' else ('desconocida' if p in ['unavailable', 'unknown'] else 'sin_cerrar') }}
+          temperatura_exterior: >-
+            {{ states('sensor.aemet_temperature') | float(none) if is_number(states('sensor.aemet_temperature')) else none }}
+
+script:
+  modo_dia:
+    alias: Modo Día
+    icon: mdi:weather-sunny
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: Día
+  modo_tarde:
+    alias: Modo Tarde
+    icon: mdi:weather-sunset
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: Tarde
+  modo_noche:
+    alias: Modo Noche
+    icon: mdi:weather-night
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: Noche
+  modo_cine:
+    alias: Modo Cine
+    icon: mdi:movie-open
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: Cine
+  modo_dormir:
+    alias: Modo Dormir
+    icon: mdi:sleep
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: Dormir
+  modo_fuera:
+    alias: Modo Fuera
+    icon: mdi:home-export-outline
+    mode: single
+    sequence:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: Fuera
+
+automation:
+  - id: casa_aplicar_modo
+    alias: 'Casa: aplicar modo'
+    description: Aplica luces y TV según el modo elegido en input_select.modo_casa. Es la única automatización que actúa sobre los dispositivos al cambiar de modo.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: input_select.modo_casa
+        not_from:
+          - unavailable
+          - unknown
+        not_to:
+          - unavailable
+          - unknown
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.from_state.state != trigger.to_state.state }}"
+    actions:
+      - variables:
+          modo: "{{ trigger.to_state.state }}"
+          anterior: "{{ trigger.from_state.state }}"
+          kelvin_tarde: >-
+            {% set e = state_attr('sun.sun', 'elevation') | float(0) %}
+            {% set x = [[e, 5] | min, -6] | max %}
+            {{ (2400 + (x + 6) / 11 * 1000) | round(0) | int }}
+      - if:
+          - condition: template
+            value_template: "{{ modo == 'Cine' and anterior in ['Día', 'Tarde', 'Noche'] }}"
+        then:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.modo_previo
+            data:
+              option: "{{ anterior }}"
+      - if:
+          - condition: template
+            value_template: "{{ anterior == 'Cine' and modo != 'Cine' }}"
+        then:
+          - action: light.turn_off
+            target:
+              entity_id: light.led_tv
+      - choose:
+          - conditions: "{{ modo == 'Día' }}"
+            sequence:
+              - repeat:
+                  for_each:
+                    - light.lampara_sofa
+                    - light.lampara_comedor
+                    - light.lampara_dormitorio
+                  sequence:
+                    - if:
+                        - condition: template
+                          value_template: "{{ is_state(repeat.item, 'on') }}"
+                      then:
+                        - action: light.turn_on
+                          target:
+                            entity_id: "{{ repeat.item }}"
+                          data:
+                            color_temp_kelvin: 4000
+                            transition: 5
+          - conditions: "{{ modo == 'Tarde' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: light.lampara_sofa
+                data:
+                  brightness_pct: 60
+                  color_temp_kelvin: "{{ kelvin_tarde }}"
+                  transition: 10
+              - action: light.turn_on
+                target:
+                  entity_id: light.lampara_comedor
+                data:
+                  brightness_pct: 40
+                  color_temp_kelvin: "{{ kelvin_tarde }}"
+                  transition: 10
+              - action: light.turn_on
+                target:
+                  entity_id: light.lampara_pie
+                data:
+                  brightness_pct: 50
+                  transition: 10
+                continue_on_error: true
+          - conditions: "{{ modo == 'Noche' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id:
+                    - light.lampara_sofa
+                    - light.lampara_comedor
+                data:
+                  brightness_pct: 30
+                  color_temp_kelvin: 2202
+                  transition: 10
+              - action: light.turn_on
+                target:
+                  entity_id: light.lampara_pie
+                data:
+                  brightness_pct: 30
+                  transition: 10
+                continue_on_error: true
+              - action: light.turn_off
+                target:
+                  entity_id: light.led_cocina
+          - conditions: "{{ modo == 'Cine' }}"
+            sequence:
+              - action: light.turn_on
+                target:
+                  entity_id: light.led_tv
+              - action: light.turn_on
+                target:
+                  entity_id: light.lampara_sofa
+                data:
+                  brightness_pct: 15
+                  color_temp_kelvin: 2202
+                  transition: 5
+              - action: light.turn_off
+                target:
+                  entity_id:
+                    - light.lampara_pie
+                    - light.lampara_comedor
+                    - light.led_cocina
+                data:
+                  transition: 5
+                continue_on_error: true
+          - conditions: "{{ modo == 'Dormir' }}"
+            sequence:
+              - action: light.turn_off
+                target:
+                  entity_id:
+                    - light.lampara_sofa
+                    - light.lampara_comedor
+                    - light.lampara_pie
+                    - light.led_cocina
+                    - light.led_tv
+                    - light.lampara_recibidor
+                continue_on_error: true
+              - if:
+                  - condition: template
+                    value_template: "{{ states('media_player.tv_salon') not in ['off', 'unavailable', 'unknown', 'standby'] }}"
+                then:
+                  - action: media_player.turn_off
+                    target:
+                      entity_id: media_player.tv_salon
+              - action: light.turn_on
+                target:
+                  entity_id: light.lampara_dormitorio
+                data:
+                  brightness_pct: 10
+                  color_temp_kelvin: 2202
+                  transition: 3
+              - delay:
+                  minutes: 2
+              - action: light.turn_off
+                target:
+                  entity_id: light.lampara_dormitorio
+                data:
+                  transition: 10
+          - conditions: "{{ modo == 'Fuera' }}"
+            sequence:
+              - action: light.turn_off
+                target:
+                  entity_id:
+                    - light.lampara_sofa
+                    - light.lampara_comedor
+                    - light.lampara_pie
+                    - light.led_cocina
+                    - light.led_tv
+                    - light.lampara_recibidor
+                    - light.lampara_dormitorio
+                continue_on_error: true
+              - if:
+                  - condition: template
+                    value_template: "{{ states('media_player.tv_salon') not in ['off', 'unavailable', 'unknown', 'standby'] }}"
+                then:
+                  - action: media_player.turn_off
+                    target:
+                      entity_id: media_player.tv_salon
+
+  - id: casa_despertar_laborable
+    alias: 'Casa: despertar en día laborable'
+    description: A la hora de despertar de los días laborables pasa a modo Día si la casa estaba en Noche o Dormir.
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hora_despertar_laborable
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: state
+        entity_id: binary_sensor.dia_laborable
+        state: "on"
+      - condition: state
+        entity_id: input_select.modo_casa
+        state:
+          - Noche
+          - Dormir
+    actions:
+      - action: script.modo_dia
+
+  - id: casa_despertar_festivo
+    alias: 'Casa: despertar en festivo'
+    description: A la hora de despertar de festivos y fines de semana pasa a modo Día si la casa estaba en Noche o Dormir. Si el calendario laboral no responde, se trata como festivo.
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hora_despertar_festivo
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: template
+        value_template: "{{ not is_state('binary_sensor.dia_laborable', 'on') }}"
+      - condition: state
+        entity_id: input_select.modo_casa
+        state:
+          - Noche
+          - Dormir
+    actions:
+      - action: script.modo_dia
+
+  - id: casa_tarde_por_sol
+    alias: 'Casa: tarde al bajar el sol'
+    description: Pasa de Día a Tarde cuando el sol baja de 5 grados de elevación y hay alguien en casa.
+    mode: single
+    triggers:
+      - trigger: numeric_state
+        entity_id: sun.sun
+        attribute: elevation
+        below: 5
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: state
+        entity_id: input_select.modo_casa
+        state: Día
+      - condition: state
+        entity_id: person.residente
+        state: home
+    actions:
+      - action: script.modo_tarde
+
+  - id: casa_noche_por_hora
+    alias: 'Casa: noche a la hora programada'
+    description: A la hora de modo Noche pasa de Tarde a Noche. Si en ese momento hay Cine, el modo al que se vuelve pasa a ser Noche.
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.hora_noche
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+    actions:
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state: Tarde
+            sequence:
+              - action: script.modo_noche
+          - conditions:
+              - condition: state
+                entity_id: input_select.modo_casa
+                state: Cine
+              - condition: state
+                entity_id: input_select.modo_previo
+                state: Tarde
+            sequence:
+              - action: input_select.select_option
+                target:
+                  entity_id: input_select.modo_previo
+                data:
+                  option: Noche
+
+  - id: casa_cine_al_encender_tv
+    alias: 'Casa: cine al encender la TV'
+    description: Al encender la TV en modo Tarde o Noche pasa a modo Cine; el modo anterior queda guardado en modo_previo.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: media_player.tv_salon
+        from: "off"
+        to: "on"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: state
+        entity_id: input_select.modo_casa
+        state:
+          - Tarde
+          - Noche
+    actions:
+      - action: script.modo_cine
+
+  - id: casa_cine_al_apagar_tv
+    alias: 'Casa: salir de cine al apagar la TV'
+    description: Al apagar la TV en modo Cine vuelve al modo guardado en modo_previo (Tarde si no es válido).
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: media_player.tv_salon
+        from: "on"
+        to: "off"
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: state
+        entity_id: input_select.modo_casa
+        state: Cine
+    actions:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.modo_casa
+        data:
+          option: >-
+            {{ states('input_select.modo_previo') if states('input_select.modo_previo') in ['Día', 'Tarde', 'Noche'] else 'Tarde' }}

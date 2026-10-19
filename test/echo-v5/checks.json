@@ -1,0 +1,41 @@
+{
+  "mounted": true,
+  "initial": {
+    "face": "casa",
+    "body": [
+      1280,
+      800
+    ],
+    "unavailable": true,
+    "smallTargets": []
+  },
+  "actualLightAction": true,
+  "longPress": true,
+  "brightness": true,
+  "firmwareTapBrightness": true,
+  "noLockWithoutConfirm": true,
+  "cancel": true,
+  "confirmedLockOnly": true,
+  "wol": true,
+  "scrollBeforeRelease": [
+    35,
+    95,
+    165,
+    245,
+    315
+  ],
+  "swipeNoActions": true,
+  "otherRoomsRealActions": true,
+  "cameraFailure": true,
+  "failureShowsActualState": true,
+  "squares": true,
+  "spotifyReadyToStart": true,
+  "spotifyMissingEchoVisible": true,
+  "spotifyFavorites": true,
+  "spotifyPause": true,
+  "spotifyNext": true,
+  "idleNoMutations": 0,
+  "idlePaints": 0,
+  "nightFace": true,
+  "errors": []
+}

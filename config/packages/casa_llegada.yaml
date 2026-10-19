@@ -1,0 +1,107 @@
+automation:
+  - id: casa_bienvenida
+    alias: 'Casa: bienvenida al llegar'
+    description: Al abrir la cerradura con la casa en Fuera o con Residente llegado hace menos de 10 min, saca la casa de Fuera (Noche o Tarde con poca luz, Día si hay sol) y enciende el recibidor al 100 % durante 5 min.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: lock.recibidor_cerradura
+        to:
+          - unlocked
+          - open
+        not_from:
+          - unavailable
+          - unknown
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: template
+        value_template: >-
+          {{ is_state('input_select.modo_casa', 'Fuera')
+             or (is_state('person.residente', 'home')
+                 and (now() - states.person.residente.last_changed).total_seconds() < 600) }}
+    actions:
+      - variables:
+          era_fuera: "{{ is_state('input_select.modo_casa', 'Fuera') }}"
+          sol_bajo: "{{ state_attr('sun.sun', 'elevation') | float(90) < 5 }}"
+          es_noche: >-
+            {{ (now().hour * 3600 + now().minute * 60) >= (state_attr('input_datetime.hora_noche', 'timestamp') | int(81000))
+               or now().hour < 6 }}
+      - if:
+          - condition: template
+            value_template: "{{ era_fuera }}"
+        then:
+          - choose:
+              - conditions: "{{ sol_bajo and es_noche }}"
+                sequence:
+                  - action: script.modo_noche
+              - conditions: "{{ sol_bajo }}"
+                sequence:
+                  - action: script.modo_tarde
+            default:
+              - action: script.modo_dia
+      - if:
+          - condition: template
+            value_template: "{{ sol_bajo and is_state('light.lampara_recibidor', 'off') }}"
+        then:
+          - action: light.turn_on
+            target:
+              entity_id: light.lampara_recibidor
+            data:
+              brightness_pct: 100
+          - delay:
+              minutes: 5
+          - action: light.turn_off
+            target:
+              entity_id: light.lampara_recibidor
+
+  - id: casa_recibidor_luz_al_abrir
+    alias: 'Casa: luz del recibidor al abrir'
+    description: Con poca luz enciende la lámpara del recibidor 5 min al abrir la cerradura, solo si estaba apagada. Sustituye a recibidor_luz_al_abrir.
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: lock.recibidor_cerradura
+        to:
+          - unlocked
+          - open
+        not_from:
+          - unavailable
+          - unknown
+    conditions:
+      - condition: numeric_state
+        entity_id: sun.sun
+        attribute: elevation
+        below: 5
+      - condition: state
+        entity_id: light.lampara_recibidor
+        state: "off"
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.lampara_recibidor
+      - delay:
+          minutes: 5
+      - action: light.turn_off
+        target:
+          entity_id: light.lampara_recibidor
+
+  - id: casa_salida
+    alias: 'Casa: salida de casa'
+    description: Cuando Residente deja de estar en casa pasa a modo Fuera.
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: person.residente
+        from: home
+    conditions:
+      - condition: state
+        entity_id: input_boolean.casa_automatica
+        state: "on"
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['home', 'unavailable', 'unknown'] }}"
+      - condition: template
+        value_template: "{{ not is_state('input_select.modo_casa', 'Fuera') }}"
+    actions:
+      - action: script.modo_fuera

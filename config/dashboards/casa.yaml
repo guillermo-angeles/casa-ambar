@@ -1,0 +1,260 @@
+views:
+- title: Casa
+  path: casa
+  type: sections
+  theme: Ámbar
+  badges:
+  - type: entity
+    entity: input_select.modo_casa
+    name: Modo
+    show_name: true
+  - type: entity
+    entity: weather.aemet
+    show_name: false
+  - type: entity
+    entity: sensor.casa_resumen
+    name: Resumen
+    show_name: true
+  sections:
+  - type: grid
+    cards:
+    - type: heading
+      heading: Modos
+      icon: mdi:home-automation
+    - type: tile
+      entity: script.modo_dia
+      name: Día
+      icon: mdi:weather-sunny
+      color: amber
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_dia
+      icon_tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_dia
+      hide_state: true
+    - type: tile
+      entity: script.modo_tarde
+      name: Tarde
+      icon: mdi:weather-sunset
+      color: orange
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_tarde
+      icon_tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_tarde
+      hide_state: true
+    - type: tile
+      entity: script.modo_noche
+      name: Noche
+      icon: mdi:weather-night
+      color: indigo
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_noche
+      icon_tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_noche
+      hide_state: true
+    - type: tile
+      entity: script.modo_cine
+      name: Cine
+      icon: mdi:movie-open
+      color: purple
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_cine
+      icon_tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_cine
+      hide_state: true
+    - type: tile
+      entity: script.modo_dormir
+      name: Dormir
+      icon: mdi:sleep
+      color: blue-grey
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_dormir
+      icon_tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_dormir
+      hide_state: true
+    - type: tile
+      entity: script.modo_fuera
+      name: Fuera
+      icon: mdi:exit-run
+      color: teal
+      tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_fuera
+      icon_tap_action:
+        action: perform-action
+        perform_action: script.turn_on
+        target:
+          entity_id: script.modo_fuera
+      hide_state: true
+  - type: grid
+    cards:
+    - type: heading
+      heading: Salón
+      icon: mdi:sofa
+    - type: tile
+      entity: light.lampara_sofa
+      name: Sofá
+      features:
+      - type: light-brightness
+      - type: light-color-temp
+    - type: tile
+      entity: light.lampara_comedor
+      name: Comedor
+      features:
+      - type: light-brightness
+      - type: light-color-temp
+    - type: tile
+      entity: light.lampara_pie
+      name: Pie
+      features:
+      - type: light-brightness
+    - type: tile
+      entity: light.led_tv
+      name: LED TV
+    - type: tile
+      entity: media_player.tv_salon
+      name: TV
+      features:
+      - type: media-player-volume-buttons
+    - type: picture-entity
+      entity: camera.echo_salon_camera
+      name: Cámara del salón
+      camera_view: auto
+      show_state: false
+  - type: grid
+    cards:
+    - type: heading
+      heading: Cocina
+      icon: mdi:countertop
+    - type: tile
+      entity: light.led_cocina
+      name: LED cocina
+      features:
+      - type: light-brightness
+  - type: grid
+    cards:
+    - type: heading
+      heading: Dormitorio
+      icon: mdi:bed
+    - type: tile
+      entity: light.lampara_dormitorio
+      name: Lámpara
+      features:
+      - type: light-brightness
+      - type: light-color-temp
+  - type: grid
+    cards:
+    - type: heading
+      heading: Recibidor
+      icon: mdi:door
+    - type: tile
+      entity: lock.recibidor_cerradura
+      name: Cerradura
+      tap_action:
+        action: none
+      icon_tap_action:
+        action: none
+    - type: tile
+      entity: light.lampara_recibidor
+      name: Lámpara
+      features:
+      - type: light-brightness
+    - type: picture-entity
+      entity: camera.recibidor
+      camera_view: auto
+      show_state: false
+  - type: grid
+    cards:
+    - type: heading
+      heading: Música
+      icon: mdi:music
+    - type: media-control
+      entity: media_player.spotify
+  - type: grid
+    cards:
+    - type: heading
+      heading: Lista de la compra
+      icon: mdi:cart
+    - type: todo-list
+      entity: todo.cookidoo_lista_de_la_compra
+      hide_completed: true
+  - type: grid
+    visibility:
+    - condition: or
+      conditions:
+      - condition: numeric_state
+        entity: sensor.mando_salon_bateria
+        below: 20
+      - condition: numeric_state
+        entity: sensor.mando_cocina_bateria
+        below: 20
+      - condition: numeric_state
+        entity: sensor.mando_habitacion_bateria
+        below: 20
+      - condition: numeric_state
+        entity: sensor.recibidor_cerradura_battery
+        below: 20
+      - condition: state
+        entity: binary_sensor.casa_copia_fallida
+        state: 'on'
+    cards:
+    - type: heading
+      heading: Sistema
+      icon: mdi:cog
+    - type: tile
+      entity: sensor.mando_salon_bateria
+      name: Mando salón
+      features:
+      - type: bar-gauge
+    - type: tile
+      entity: sensor.mando_cocina_bateria
+      name: Mando cocina
+      features:
+      - type: bar-gauge
+    - type: tile
+      entity: sensor.mando_habitacion_bateria
+      name: Mando dormitorio
+      features:
+      - type: bar-gauge
+    - type: tile
+      entity: sensor.recibidor_cerradura_battery
+      name: Cerradura
+      features:
+      - type: bar-gauge
+    - type: tile
+      entity: binary_sensor.casa_copia_fallida
+      name: Copias
+    - type: tile
+      entity: sensor.backup_last_successful_automatic_backup
+      name: Última copia

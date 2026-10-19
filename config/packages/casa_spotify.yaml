@@ -1,0 +1,53 @@
+script:
+  spotify_favoritos:
+    alias: Spotify favoritos en el Echo
+    icon: mdi:spotify
+    mode: single
+    fields:
+      tipo:
+        default: current_user_saved_tracks
+        selector:
+          select:
+            options:
+              - current_user_saved_tracks
+              - playlist
+      lista:
+        default: current_user_saved_tracks
+        selector:
+          text:
+    sequence:
+      - variables:
+          destino: Echo Salón
+          favoritos_tipo: "{{ tipo | default('current_user_saved_tracks', true) }}"
+          favoritos_lista: "{{ lista | default('current_user_saved_tracks', true) }}"
+      - if:
+          - condition: template
+            value_template: "{{ destino not in (state_attr('media_player.spotify', 'source_list') or []) }}"
+        then:
+          - stop: Abre Spotify y selecciona Echo Salón una vez en Conectar a un dispositivo.
+            error: true
+      - if:
+          - condition: template
+            value_template: "{{ favoritos_tipo not in ['current_user_saved_tracks', 'playlist'] }}"
+        then:
+          - stop: Tipo de favoritos no válido.
+            error: true
+      - action: media_player.select_source
+        target:
+          entity_id: media_player.spotify
+        data:
+          source: "{{ destino }}"
+      - action: media_player.play_media
+        target:
+          entity_id: media_player.spotify
+        data:
+          media_content_type: "{{ favoritos_tipo }}"
+          media_content_id: "{{ favoritos_lista }}"
+      - action: media_player.shuffle_set
+        target:
+          entity_id: media_player.spotify
+        data:
+          shuffle: true
+      - action: media_player.media_next_track
+        target:
+          entity_id: media_player.spotify
