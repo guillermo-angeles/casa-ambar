@@ -2,8 +2,29 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [[ ${1:-} == --help ]]; then
+  printf 'Uso: tools/deploy.sh --version vX.Y.Z [--check|--dashcast-only|--echo-camera|--voice-apps|--voice-setup|--groq-stt|--echo-voice|--voice-groq|--voice-whisper|--voice-instructions]\n'
+  exit 0
+fi
+[[ ${1:-} == --version && $# -ge 2 && $# -le 3 ]] || { echo 'Indica --version vX.Y.Z; consulta --help' >&2; exit 1; }
+RELEASE_TAG="$2"
+MODE="${3:-}"
+case "$MODE" in
+  ""|--check|--dashcast-only|--echo-camera|--voice-apps|--voice-setup|--groq-stt|--echo-voice|--voice-groq|--voice-whisper|--voice-instructions) ;;
+  *) echo 'Opcion no valida' >&2; exit 1 ;;
+esac
+if [[ "$MODE" == --echo-voice ]]; then
+  SOURCE_MANIFEST="$(/usr/bin/python3 -I "$ROOT/tools/release.py" verify "$RELEASE_TAG" --native)" || exit 1
+else
+  SOURCE_MANIFEST="$(/usr/bin/python3 -I "$ROOT/tools/release.py" verify "$RELEASE_TAG")" || exit 1
+fi
+if [[ "$MODE" == --check ]]; then
+  printf '%s\n' "$SOURCE_MANIFEST"
+  exit 0
+fi
 source "$ROOT/tools/lib.sh"
-[[ $# -eq 0 || ( $# -eq 1 && ( "${1:-}" == "--dashcast-only" || "${1:-}" == "--echo-camera" || "${1:-}" == "--voice-apps" || "${1:-}" == "--voice-setup" || "${1:-}" == "--groq-stt" || "${1:-}" == "--echo-voice" || "${1:-}" == "--voice-groq" || "${1:-}" == "--voice-whisper" || "${1:-}" == "--voice-instructions" ) ) ]] || die "opcion no valida"
+source "$ROOT/tools/deployment.sh"
+set -- "$MODE"
 DASHCAST_ONLY=false
 [[ ${1:-} == "--dashcast-only" ]] && DASHCAST_ONLY=true
 ECHO_CAMERA=false
@@ -20,11 +41,13 @@ CFG="$ROOT/config"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 REMOTE_BACKUP="/config/configuration.yaml.pre-casa-${STAMP}"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap 'finish_deployment $?' EXIT
+printf '%s\n' "$SOURCE_MANIFEST" > "$WORK/source.json"
 
 [[ -f "$CFG/configuration.snippet.yaml" ]] || die "falta configuration.snippet.yaml"
 [[ -f "$SSH_KEY" ]] || die "no existe la clave SSH $SSH_KEY"
 
+printf 'Version seleccionada: %s\n' "$RELEASE_TAG"
 if [[ ${1:-} == "--voice-instructions" ]]; then
   printf 'Se actualizaran las instrucciones de Claude con copia y check, sin cambiar el pipeline ni reiniciar HA.\n'
 elif [[ ${1:-} == "--voice-groq" || ${1:-} == "--voice-whisper" ]]; then
@@ -53,13 +76,12 @@ log "Comprobando acceso a la API y a SSH"
 [[ "$(api_code /api/)" == "200" ]] || die "la API no responde o el token no es valido"
 rssh true || die "SSH no disponible: abre el puerto 22 del add-on Terminal & SSH"
 
-log "Copia de seguridad completa (puede tardar)"
-rssh "ha backups new --name 'pre-casa-ambar-${STAMP}' --no-progress" >/dev/null || die "fallo la copia de seguridad; no se ha tocado nada"
+begin_deployment
 
 if [[ ${1:-} == "--voice-instructions" ]]; then
   rssh "ha core check" >/dev/null || die "configuracion no valida; no se han cambiado las instrucciones"
   "${PY[@]}" "$ROOT/tools/voice_setup.py" --instructions-only || die "no se confirmaron las instrucciones"
-  printf 'Copia completa HA: pre-casa-ambar-%s.\n' "$STAMP"
+  printf 'Copia completa HA: %s.\n' "$BACKUP_NAME"
   exit 0
 fi
 
@@ -68,14 +90,14 @@ if [[ ${1:-} == "--voice-groq" || ${1:-} == "--voice-whisper" ]]; then
   ENGINE=stt.casa_groq_stt
   [[ ${1:-} == "--voice-whisper" ]] && ENGINE=stt.faster_whisper
   "${PY[@]}" "$ROOT/tools/voice_setup.py" --stt-engine "$ENGINE" || die "revisar el estado del pipeline antes de continuar"
-  printf 'Copia completa HA: pre-casa-ambar-%s.\n' "$STAMP"
+  printf 'Copia completa HA: %s.\n' "$BACKUP_NAME"
   exit 0
 fi
 
 if $ECHO_VOICE; then
   rssh "ha core check" >/dev/null || die "configuracion no valida; no se ha modificado el Echo"
   "$ROOT/tools/echo_voice_deploy.sh" "$STAMP"
-  printf 'Copia completa HA: pre-casa-ambar-%s.\n' "$STAMP"
+  printf 'Copia completa HA: %s.\n' "$BACKUP_NAME"
   exit 0
 fi
 
@@ -87,8 +109,8 @@ if $GROQ_STT; then
   rssh "ha core check" >/dev/null || die "fallo la comprobacion; revisar Groq antes de reiniciar"
   api POST /api/services/homeassistant/restart >/dev/null || true
   wait_for_down
-  wait_for_ha 72 || die "HA no responde; revisar copia pre-casa-ambar-${STAMP}"
-  printf '\nAdaptador Groq instalado. Copia completa: pre-casa-ambar-%s. Pipeline conservado.\n' "$STAMP"
+  wait_for_ha 72 || die "HA no responde; revisar copia pre-casa-ambar-${RELEASE_TAG#v}-${STAMP}"
+  printf '\nAdaptador Groq instalado. Copia completa: %s. Pipeline conservado.\n' "$BACKUP_NAME"
   exit 0
 fi
 
@@ -98,10 +120,10 @@ if $VOICE_APPS || $VOICE_SETUP; then
   "${PY[@]}" "$ROOT/tools/voice_apps.py" || die "preparacion de voz incompleta; revisar apps sin borrar ni desinstalar"
   if $VOICE_SETUP; then
     "${PY[@]}" "$ROOT/tools/voice_setup.py" || die "asistente de voz incompleto; revisar el ultimo paso confirmado"
-    printf '\nAsistente Casa configurado. Copia completa: pre-casa-ambar-%s.\n' "$STAMP"
+    printf '\nAsistente Casa configurado. Copia completa: %s.\n' "$BACKUP_NAME"
     exit 0
   fi
-  printf '\nApps de voz preparadas. Copia completa: pre-casa-ambar-%s. El asistente del Echo no se ha cambiado.\n' "$STAMP"
+  printf '\nApps de voz preparadas. Copia completa: %s. El asistente del Echo no se ha cambiado.\n' "$BACKUP_NAME"
   exit 0
 fi
 
@@ -119,7 +141,7 @@ if $DASHCAST_ONLY; then
   APP_OPERATION="$(rssh "ha apps info local_casa_dashcast --raw-json" | "${PY[@]}" -c 'import json,sys; d=json.load(sys.stdin); d=d.get("data",d); print("update" if d.get("version_latest") and d.get("version") != d["version_latest"] else "rebuild")')"
   rssh "ha apps ${APP_OPERATION} local_casa_dashcast" || die "fallo la reconstruccion; codigo anterior en ${APP_BACKUP}"
   rssh "ha apps restart local_casa_dashcast" || die "dashcast no se pudo reiniciar"
-  printf '\nDashcast desplegado. Copia completa: pre-casa-ambar-%s. Codigo anterior: %s\n' "$STAMP" "$APP_BACKUP"
+  printf '\nDashcast desplegado. Copia completa: %s. Codigo anterior: %s\n' "$BACKUP_NAME" "$APP_BACKUP"
   exit 0
 fi
 
@@ -175,7 +197,7 @@ for id in "${OLD_AUTOMATIONS[@]}"; do
 done
 
 printf '\n== Resumen ==\n'
-printf 'Copia completa:        pre-casa-ambar-%s\n' "$STAMP"
+printf 'Copia completa:        %s\n' "$BACKUP_NAME"
 printf 'configuration.yaml:    fusionado (copia en %s)\n' "$REMOTE_BACKUP"
 printf 'Ficheros copiados:     %s paquetes, tema ambar, %s dashboards\n' "$(ls "$CFG"/packages/*.yaml | wc -l | tr -d ' ')" "$(ls "$CFG"/dashboards/*.yaml | wc -l | tr -d ' ')"
 printf 'Automatizaciones off:  %s\n' "${disabled[*]:-ninguna}"

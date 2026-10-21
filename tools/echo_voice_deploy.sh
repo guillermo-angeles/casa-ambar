@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[[ ${1:-} =~ ^[0-9]{8}-[0-9]{6}$ ]] || { echo 'Usar tools/deploy.sh --echo-voice' >&2; exit 1; }
+[[ ${1:-} =~ ^[0-9]{8}-[0-9]{6}$ ]] || { echo 'Usar tools/deploy.sh --version vX.Y.Z --echo-voice' >&2; exit 1; }
 STAMP="$1"
 BINARY="$ROOT/test/echo-voz/techo5-casa-arm"
 KEY="${SSH_KEY:-$HOME/.ssh/id_ed25519}"

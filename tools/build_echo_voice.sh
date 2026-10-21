@@ -25,3 +25,14 @@ docker run --rm \
   -w /src/echod golang:1.26 \
   sh -c 'go test ./internal/feature/... ./internal/hardware/... ./internal/config ./internal/update/... && GOOS=linux GOARCH=arm GOARM=7 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/HuskerMinion/techo5/echod/internal/layout.Version=v1.2.22 -X github.com/HuskerMinion/techo5/echod/internal/layout.GitCommit=casa-voz-2" -o /casa/test/echo-voz/techo5-casa-arm ./cmd/echod'
 shasum -a 256 "$ROOT/test/echo-voz/techo5-casa-arm"
+/usr/bin/python3 -I - "$ROOT" <<'PYBUILD'
+import hashlib, json, subprocess, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+manifest = {
+    "commit": subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip(),
+    "binary_sha256": hashlib.sha256((root / "test/echo-voz/techo5-casa-arm").read_bytes()).hexdigest(),
+    "patch_sha256": hashlib.sha256((root / "firmware/techo5/casa-voice.patch").read_bytes()).hexdigest(),
+}
+(root / "test/echo-voz/build-manifest.json").write_text(json.dumps(manifest) + "\n")
+PYBUILD

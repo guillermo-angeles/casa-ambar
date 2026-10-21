@@ -18,6 +18,12 @@ Capturas con datos simulados a 1280 × 800; no son imágenes de una vivienda rea
 
 La imagen de voz procede de una prueba sintética del parche nativo experimental. Consulta sus [requisitos y limitaciones](firmware/techo5/README.md) antes de instalarlo.
 
+## Versiones
+
+La primera release es [v0.1.0](https://github.com/guillermo-angeles/casa-ambar/releases/tag/v0.1.0), experimental. La versión del proyecto identifica el conjunto de fuentes; tarjeta, dashcast e integraciones mantienen sus versiones internas. Consulta [CHANGELOG.md](CHANGELOG.md) para los cambios y [el proceso de releases](docs/VERSIONES.md) para publicar versiones futuras.
+
+Los despliegues requieren una etiqueta concreta: `tools/deploy.sh --version v0.1.0`. Antes de conectar con HA puedes comprobar el checkout con `tools/deploy.sh --version v0.1.0 --check`. Revisa primero [la preparación de una instalación](docs/DESPLIEGUE.md): los identificadores son ejemplos y las adaptaciones requieren una versión propia.
+
 ## Probar en local
 
 1. Con Docker disponible, ejecuta `test/docker/run.sh`. Comprueba configuración, arranca HA con dispositivos simulados y ejecuta escenarios; debe terminar con `FALLOS: []`. Usa su propio proyecto Docker y publica solo `127.0.0.1:18124`.

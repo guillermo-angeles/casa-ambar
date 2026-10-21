@@ -15,3 +15,5 @@ private/
 *.key
 secrets.yaml
 .storage/
+
+test/echo-voz/build-manifest.json

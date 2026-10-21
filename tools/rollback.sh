@@ -2,64 +2,50 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-source "$ROOT/tools/lib.sh"
-CFG="$ROOT/config"
-[[ $# -eq 0 || ( $# -eq 1 && ( "${1:-}" == "--echo-voice" || "${1:-}" == "--voice-stt" ) ) ]] || die "opcion no valida"
-
-[[ -f "$SSH_KEY" ]] || die "no existe la clave SSH $SSH_KEY"
-
-if [[ ${1:-} == "--voice-stt" ]]; then
-  printf 'Casa volvera a transcribir con Whisper local; se conservaran Claude y Piper.\n'
-elif [[ ${1:-} == "--echo-voice" ]]; then
-  printf 'Se retirara el binario temporal del Echo y se reiniciara su proceso; sus ajustes se conservan.\n'
-else
-  printf 'Se revertira el despliegue de Casa Ambar en %s.\n' "$HA_HOST"
+if [[ ${1:-} == --help ]]; then
+  printf 'Uso: tools/rollback.sh --deployment AAAAMMDD-HHMMSS | --echo-voice | --voice-stt --version vX.Y.Z\n'
+  exit 0
 fi
-read -r -p "Escribe REVERTIR para continuar: " answer
-[[ "$answer" == "REVERTIR" ]] || die "cancelado"
+MODE="${1:-}"
+case "$MODE" in
+  --deployment) [[ $# -eq 2 && "$2" =~ ^[0-9]{8}-[0-9]{6}$ ]] || exit 1 ;;
+  --echo-voice) [[ $# -eq 1 ]] || exit 1 ;;
+  --voice-stt) [[ $# -eq 3 && "$2" == --version ]] || exit 1 ;;
+  *) echo 'Selecciona un despliegue concreto; consulta --help' >&2; exit 1 ;;
+esac
+source "$ROOT/tools/lib.sh"
+[[ -f "$SSH_KEY" ]] || die "no existe la clave SSH configurada"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
 
-if [[ ${1:-} == "--echo-voice" ]]; then
+if [[ "$MODE" == --deployment ]]; then
+  DEPLOYMENT="$2"
+  rssh "cat '/config/.casa-ambar/deployments/${DEPLOYMENT}.json'" > "$WORK/deployment.json" || die "registro de despliegue no disponible"
+  SLUG="$("${PY[@]}" "$ROOT/tools/release.py" rollback-info "$WORK/deployment.json" "$DEPLOYMENT")" || die "no se pudo verificar el registro; no se restaurara ninguna copia"
+  printf 'Se restaurara la copia COMPLETA de HA %s anterior al despliegue %s.\n' "$SLUG" "$DEPLOYMENT"
+  printf 'Se perderan los cambios posteriores a esa copia. El Echo no forma parte de la copia de HA.\n'
+  "${PY[@]}" - "$WORK/deployment.json" <<'PY'
+import json, sys
+record = json.load(open(sys.argv[1]))
+print('Version del despliegue:', record['source']['tag'])
+scopes = record['previous']['scopes']
+print('Versiones anteriores:', ', '.join(key + '=' + value['tag'] for key, value in scopes.items()) or 'sin registro previo')
+PY
+elif [[ "$MODE" == --voice-stt ]]; then
+  printf 'Casa volvera a Whisper local mediante %s; Claude y Piper se conservan.\n' "$3"
+else
+  printf 'Se retirara el montaje temporal del Echo y se reiniciara su ejecutable persistente; sus ajustes se conservan.\n'
+fi
+read -r -p 'Escribe REVERTIR para continuar: ' answer
+[[ "$answer" == REVERTIR ]] || die "cancelado"
+
+if [[ "$MODE" == --echo-voice ]]; then
   ssh -i "$SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=5 "root@${ECHO_HOST:?Configura ECHO_HOST}" \
     'umount -l /usr/local/bin/techo5 && killall techo5'
-  printf 'Ejecutable original restaurado. Esperar la reconexion del Echo.\n'
-  exit 0
+  printf 'Montaje temporal retirado. Verifica el Echo y su reconexion.\n'
+elif [[ "$MODE" == --voice-stt ]]; then
+  echo DESPLEGAR | "$ROOT/tools/deploy.sh" --version "$3" --voice-whisper
+else
+  rssh "ha backups restore '$SLUG' --no-progress" || die "restauracion no confirmada; revisa el estado y la copia en la interfaz HA"
+  printf 'Supervisor acepto la restauracion de %s. Verifica el arranque y las versiones en HA antes de otro despliegue.\n' "$SLUG"
 fi
-
-if [[ ${1:-} == "--voice-stt" ]]; then
-  echo DESPLEGAR | "$ROOT/tools/deploy.sh" --voice-whisper
-  exit 0
-fi
-
-load_token
-rssh true || die "SSH no disponible: abre el puerto 22 del add-on Terminal & SSH"
-
-backup="$(rssh "ls -1 /config/configuration.yaml.pre-casa-* 2>/dev/null | sort | head -n 1" || true)"
-[[ -n "$backup" ]] || die "no hay copia configuration.yaml.pre-casa-* en /config"
-
-log "Restaurando configuration.yaml desde $(basename "$backup")"
-rssh "cp -p '${backup}' /config/configuration.yaml"
-
-log "Borrando ficheros desplegados"
-for f in "$CFG"/packages/*.yaml; do rssh "rm -f '/config/packages/$(basename "$f")'"; done
-rssh "rm -f /config/themes/ambar.yaml"
-for f in "$CFG"/dashboards/*.yaml; do rssh "rm -f '/config/dashboards/$(basename "$f")'"; done
-
-log "Comprobando la configuracion restaurada"
-rssh "ha core check" >/dev/null 2>&1 || die "la configuracion restaurada no pasa la comprobacion; revisa a mano"
-
-log "Reiniciando Home Assistant"
-api POST /api/services/homeassistant/restart >/dev/null || true
-wait_for_down
-wait_for_ha 72 || die "Home Assistant no responde tras el reinicio"
-
-log "Reactivando automatizaciones antiguas"
-for id in "${OLD_AUTOMATIONS[@]}"; do
-  if automation_exists "$id"; then
-    automation_service turn_on "$id"
-    printf 'activada: %s\n' "$id"
-  else
-    printf 'no encontrada: %s\n' "$id"
-  fi
-done
-
-printf '\nRollback completado. La copia completa pre-casa-ambar-* sigue en Ajustes > Sistema > Copias de seguridad.\n'

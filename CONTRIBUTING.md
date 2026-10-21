@@ -35,7 +35,9 @@ Elige las comprobaciones según el cambio; para documentación basta con revisar
 
 Docker genera su configuración de pruebas ignorada por Git y usa dispositivos simulados. No incluyas esos archivos en un commit. Las pruebas de navegador requieren un Chrome aislado con los puertos que indican sus instrucciones; los verificadores cierran ese navegador al terminar.
 
-Si modificas `config/www/casa-ambar/casa-ambar-card.js`, aumenta `VERSION` y el `?v=` de `config/configuration.snippet.yaml`. Regenera las capturas afectadas desde las demos anónimas y documenta cualquier límite de validación. Para cambios visibles de comportamiento, añade una entrada en la sección «Sin versión» de [CHANGELOG.md](CHANGELOG.md).
+Si modificas `config/www/casa-ambar/casa-ambar-card.js`, aumenta `VERSION` y el `?v=` de `config/configuration.snippet.yaml`. Regenera las capturas afectadas desde las demos anónimas y documenta cualquier límite de validación. Para cambios visibles de comportamiento, añade una entrada en la sección «Sin publicar» de [CHANGELOG.md](CHANGELOG.md).
+
+El proceso para agrupar cambios, etiquetar un commit y publicar una release está en [docs/VERSIONES.md](docs/VERSIONES.md). No cambies versiones internas de componentes que no has modificado ni reutilices una etiqueta publicada.
 
 ## Commits, despliegue y licencia
 
